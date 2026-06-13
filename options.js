@@ -98,7 +98,7 @@ const OPTIONS_LOCALIZATION = {
       </div>
       <div class="guide-item">
         <div class="guide-step">3. Dịch văn bản tự do trong Popup</div>
-        <p class="guide-text">Nhấp vào biểu tượng tiện ích hoặc nhấn tổ hợp phím <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>Q</kbd> để mở nhanh cửa sổ dịch. Ô nhập liệu có tích hợp <strong>nút dán (paste)</strong> ở góc dưới bên phải giúp bạn dán nhanh nội dung đã sao chép từ clipboard chỉ với một cú click, sau đó chọn ngôn ngữ muốn dịch để nhận kết quả tức thời.</p>
+        <p class="guide-text">Nhấp vào biểu tượng tiện ích hoặc nhấn tổ hợp phím <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>W</kbd> để mở nhanh cửa sổ dịch. Ô nhập liệu có tích hợp <strong>nút dán (paste)</strong> ở góc dưới bên phải giúp bạn dán nhanh nội dung đã sao chép từ clipboard chỉ với một cú click, sau đó chọn ngôn ngữ muốn dịch để nhận kết quả tức thời.</p>
       </div>
       <div class="guide-item">
         <div class="guide-step">4. Trang quản lý Lịch sử dịch thuật</div>
@@ -150,7 +150,7 @@ const OPTIONS_LOCALIZATION = {
       </div>
       <div class="guide-item">
         <div class="guide-step">3. Free Text Translation (Popup)</div>
-        <p class="guide-text">Click the extension icon or press <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>Q</kbd> to quickly open the popup. The input box features a **paste button** in the bottom-right corner, allowing you to paste copied text from your clipboard with a single click. Select your target language to get instant results.</p>
+        <p class="guide-text">Click the extension icon or press <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>W</kbd> to quickly open the popup. The input box features a **paste button** in the bottom-right corner, allowing you to paste copied text from your clipboard with a single click. Select your target language to get instant results.</p>
       </div>
       <div class="guide-item">
         <div class="guide-step">4. Dedicated Translation History</div>
