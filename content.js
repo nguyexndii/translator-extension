@@ -250,12 +250,18 @@
       startSelectionMode();
     }
 
-    // 3. Alt + Shift + D: Translate Highlighted Text
-    if (e.altKey && e.shiftKey && (e.key === 'D' || e.key === 'd')) {
+    // 3. Alt + Shift + F: Translate Highlighted Text
+    if (e.altKey && e.shiftKey && (e.key === 'F' || e.key === 'f')) {
       e.preventDefault();
       hideFloatingTranslateIcon(); // Hide icon if visible before translating
       if (isTranslating) return;
       triggerTextTranslation(true);
+    }
+
+    // 4. Alt + Shift + W: Open Quick Translation Popup (Fallback)
+    if (e.altKey && e.shiftKey && (e.key === 'W' || e.key === 'w')) {
+      e.preventDefault();
+      safeSendMessage({ action: 'open-popup' });
     }
   });
 
@@ -716,7 +722,32 @@
     // Body
     const body = document.createElement('div');
     body.className = 'gst-toast-body';
-    body.textContent = errorMsg;
+    
+    const isMissingKey = errorMsg.toLowerCase().includes('configure api keys') || 
+                         errorMsg.toLowerCase().includes('cấu hình api key') ||
+                         errorMsg.toLowerCase().includes('vui lòng cấu hình api key');
+                         
+    if (isMissingKey) {
+      body.textContent = errorMsg + ' ';
+      
+      const link = document.createElement('a');
+      link.href = '#';
+      link.className = 'gst-toast-link';
+      link.textContent = currentUiLang === 'vi' ? 'Đi đến Cài đặt' : 'Go to Settings';
+      link.style.color = '#a8b8ff';
+      link.style.textDecoration = 'underline';
+      link.style.fontWeight = 'bold';
+      link.style.marginLeft = '8px';
+      link.style.cursor = 'pointer';
+      
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        safeSendMessage({ action: 'open-options-page' });
+      });
+      body.appendChild(link);
+    } else {
+      body.textContent = errorMsg;
+    }
     toast.appendChild(body);
 
     getActiveContainer().appendChild(toast);

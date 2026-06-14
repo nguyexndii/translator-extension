@@ -1,0 +1,20 @@
+{
+  "appName": {
+    "message": "Screen Translator"
+  },
+  "appDesc": {
+    "message": "Translate selected screen regions or highlighted text using Gemini API."
+  },
+  "descExecuteAction": {
+    "message": "Open the quick translation popup"
+  },
+  "descTriggerTranslation": {
+    "message": "Start selecting screen region to translate"
+  },
+  "descTriggerTextTranslation": {
+    "message": "Translate highlighted text on the webpage"
+  },
+  "descOpenHistory": {
+    "message": "Open the translation history page"
+  }
+}

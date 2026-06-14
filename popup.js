@@ -354,7 +354,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const filtered = itemsList.filter(lang => {
         const labelClean = removeAccents(lang.label);
         const valClean = removeAccents(lang.value);
-        const filterClean = removeAccents(filterText);
+        const filterClean = removeAccents(filterText.trim());
         return labelClean.includes(filterClean) || valClean.includes(filterClean);
       });
 

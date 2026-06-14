@@ -308,6 +308,21 @@ a:hover, .chrome-link:hover {
   box-sizing: border-box;
 }
 
+/* Custom scrollbar for dropdown lists */
+.dropdown-list::-webkit-scrollbar {
+  width: 6px;
+}
+.dropdown-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.dropdown-list::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+}
+.dropdown-list::-webkit-scrollbar-thumb:hover {
+  background: var(--primary-color);
+}
+
 .dropdown-item {
   padding: 8px 12px;
   cursor: pointer;
@@ -468,7 +483,8 @@ kbd {
 .collapsible-header {
   display: flex !important;
   align-items: center !important;
-  justify-content: space-between !important;
+  justify-content: flex-start !important;
+  gap: 8px !important;
   cursor: pointer !important;
   user-select: none !important;
   margin-bottom: 0 !important; /* No bottom margin when collapsed */
@@ -686,6 +702,41 @@ kbd {
 
 :root.light-mode .theme-select-input:focus {
   box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.2);
+}
+
+/* Custom scrollbar for the page */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary-color);
+}
+
+/* API Key Input highlight pulse animation */
+@keyframes highlight-pulse {
+  0% {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(168, 184, 255, 0.2);
+  }
+  50% {
+    border-color: #ff5252;
+    box-shadow: 0 0 0 6px rgba(255, 82, 82, 0.4);
+  }
+  100% {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(168, 184, 255, 0.2);
+  }
+}
+.api-key-input-highlight {
+  animation: highlight-pulse 1.5s ease-in-out 3;
 }
 
 

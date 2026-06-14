@@ -69,6 +69,7 @@ const OPTIONS_LOCALIZATION = {
     lblTheme: 'Chế độ giao diện (Theme):',
     secShortcut: 'Phím tắt dịch thuật',
     descShortcut: 'Danh sách phím tắt mặc định dùng để kích hoạt các chế độ dịch:',
+    lblShortcutPopup: 'Mở cửa sổ dịch nhanh (Popup):',
     lblShortcutCrop: 'Chọn vùng màn hình để dịch:',
     lblShortcutText: 'Dịch văn bản bôi đen:',
     lblShortcutHistory: 'Mở trang Lịch sử dịch thuật:',
@@ -94,7 +95,7 @@ const OPTIONS_LOCALIZATION = {
       </div>
       <div class="guide-item">
         <div class="guide-step">2. Dịch văn bản bôi đen (Highlight)</div>
-        <p class="guide-text">Bôi đen đoạn văn bản trên trang web rồi nhấn tổ hợp phím <span id="guideShortcutText"><kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>D</kbd></span>, nhấp chuột vào biểu tượng dịch nổi hoặc chọn lệnh dịch từ menu chuột phải. Khung chứa bản dịch sẽ xuất hiện ngay dưới vùng chọn. Để tối giản giao diện, thông tin chi tiết về ngôn ngữ dịch đã được lược bỏ.</p>
+        <p class="guide-text">Bôi đen đoạn văn bản trên trang web rồi nhấn tổ hợp phím <span id="guideShortcutText"><kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>F</kbd></span>, nhấp chuột vào biểu tượng dịch nổi hoặc chọn lệnh dịch từ menu chuột phải. Khung chứa bản dịch sẽ xuất hiện ngay dưới vùng chọn. Để tối giản giao diện, thông tin chi tiết về ngôn ngữ dịch đã được lược bỏ.</p>
       </div>
       <div class="guide-item">
         <div class="guide-step">3. Dịch văn bản tự do trong Popup</div>
@@ -121,6 +122,7 @@ const OPTIONS_LOCALIZATION = {
     lblTheme: 'Theme Mode:',
     secShortcut: 'Translation Shortcuts',
     descShortcut: 'Default shortcuts used to trigger translation modes:',
+    lblShortcutPopup: 'Open quick translation popup:',
     lblShortcutCrop: 'Select screen region to translate:',
     lblShortcutText: 'Translate highlighted text:',
     lblShortcutHistory: 'Open Translation History:',
@@ -146,7 +148,7 @@ const OPTIONS_LOCALIZATION = {
       </div>
       <div class="guide-item">
         <div class="guide-step">2. Highlighted Text Translation</div>
-        <p class="guide-text">Highlight any text on the webpage and press <span id="guideShortcutText"><kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>D</kbd></span>, click the floating translation icon, or select the translation option from the right-click context menu. The translation will appear immediately below the selection. Source and target language badges are hidden to keep the UI clean.</p>
+        <p class="guide-text">Highlight any text on the webpage and press <span id="guideShortcutText"><kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>F</kbd></span>, click the floating translation icon, or select the translation option from the right-click context menu. The translation will appear immediately below the selection. Source and target language badges are hidden to keep the UI clean.</p>
       </div>
       <div class="guide-item">
         <div class="guide-step">3. Free Text Translation (Popup)</div>
@@ -303,6 +305,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('lblTheme').textContent = dict.lblTheme;
     document.getElementById('secShortcut').textContent = dict.secShortcut;
     document.getElementById('descShortcut').textContent = dict.descShortcut;
+    document.getElementById('lblShortcutPopup').textContent = dict.lblShortcutPopup;
     document.getElementById('lblShortcutCrop').textContent = dict.lblShortcutCrop;
     document.getElementById('lblShortcutText').textContent = dict.lblShortcutText;
     document.getElementById('lblShortcutHistory').textContent = dict.lblShortcutHistory;
@@ -352,7 +355,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof chrome !== 'undefined' && chrome.commands && chrome.commands.getAll) {
       chrome.commands.getAll((commands) => {
         commands.forEach((cmd) => {
-          if (cmd.name === 'trigger-translation') {
+          if (cmd.name === '_execute_action') {
+            const formatted = cmd.shortcut 
+              ? formatShortcut(cmd.shortcut, dict.shortcutNotSet, 'Alt + Shift + W')
+              : formatShortcut('Alt + Shift + W', dict.shortcutNotSet, 'Alt + Shift + W');
+            const el = document.getElementById('shortcutPopupValue');
+            if (el) el.innerHTML = formatted;
+          } else if (cmd.name === 'trigger-translation') {
             const formatted = formatShortcut(cmd.shortcut, dict.shortcutNotSet, 'Alt + Shift + S');
             const el = document.getElementById('shortcutCropValue');
             if (el) el.innerHTML = formatted;
@@ -360,7 +369,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const elGuide = document.getElementById('guideShortcutCrop');
             if (elGuide) elGuide.innerHTML = formatted;
           } else if (cmd.name === 'trigger-text-translation') {
-            const formatted = formatShortcut(cmd.shortcut, dict.shortcutNotSet, 'Alt + Shift + D');
+            const formatted = formatShortcut(cmd.shortcut, dict.shortcutNotSet, 'Alt + Shift + F');
             const el = document.getElementById('shortcutTextValue');
             if (el) el.innerHTML = formatted;
 
@@ -429,6 +438,21 @@ document.addEventListener('DOMContentLoaded', () => {
     isDirty = false;
     if (saveStatusRow) {
       saveStatusRow.classList.remove('visible');
+    }
+
+    // Check query params to focus and highlight API key input
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('focusKey') === 'true') {
+      setTimeout(() => {
+        const firstInput = apiKeysContainer.querySelector('.api-key-input');
+        if (firstInput) {
+          firstInput.focus();
+          firstInput.classList.add('api-key-input-highlight');
+          setTimeout(() => {
+            firstInput.classList.remove('api-key-input-highlight');
+          }, 4500);
+        }
+      }, 300);
     }
   });
 
@@ -610,7 +634,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const filtered = itemsList.filter(item => {
         const labelClean = removeAccents(item.label);
         const valClean = removeAccents(item.value);
-        const filterClean = removeAccents(filterText);
+        const filterClean = removeAccents(filterText.trim());
         return labelClean.includes(filterClean) || valClean.includes(filterClean);
       });
 

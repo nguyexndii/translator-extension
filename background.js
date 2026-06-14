@@ -144,6 +144,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     handleTextTranslationFromPopup(message.text, message.targetLang, sendResponse);
     return true;
   }
+
+  if (message.action === 'open-popup') {
+    chrome.action.openPopup(() => {
+      if (chrome.runtime.lastError) {
+        console.warn('Failed to open popup via chrome.action.openPopup:', chrome.runtime.lastError.message);
+      }
+    });
+    sendResponse({ status: 'opening' });
+    return true;
+  }
+
+  if (message.action === 'open-options-page') {
+    chrome.tabs.create({ url: chrome.runtime.getURL('options.html?focusKey=true') });
+    sendResponse({ status: 'options-opened' });
+    return true;
+  }
 });
 
 // Capture visible screen, crop it locally in content.js, and send it to Gemini API

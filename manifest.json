@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "Screen Translator",
+  "name": "__MSG_appName__",
   "version": "1.0",
-  "description": "Translate selected screen regions or highlighted text using API.",
+  "description": "__MSG_appDesc__",
+  "default_locale": "en",
   "permissions": [
     "activeTab",
     "storage",
@@ -47,28 +48,28 @@
         "default": "Alt+Shift+W",
         "mac": "Alt+Shift+W"
       },
-      "description": "Mở giao diện dịch nhanh (Popup)"
+      "description": "__MSG_descExecuteAction__"
     },
     "trigger-translation": {
       "suggested_key": {
         "default": "Alt+Shift+S",
         "mac": "Alt+Shift+S"
       },
-      "description": "Start selecting screen region to translate"
+      "description": "__MSG_descTriggerTranslation__"
     },
     "trigger-text-translation": {
       "suggested_key": {
-        "default": "Alt+Shift+D",
-        "mac": "Alt+Shift+D"
+        "default": "Alt+Shift+F",
+        "mac": "Alt+Shift+F"
       },
-      "description": "Translate highlighted text on the webpage"
+      "description": "__MSG_descTriggerTextTranslation__"
     },
     "open-history": {
       "suggested_key": {
         "default": "Alt+Shift+H",
         "mac": "Alt+Shift+H"
       },
-      "description": "Mở trang Lịch sử dịch thuật"
+      "description": "__MSG_descOpenHistory__"
     }
   }
 }

@@ -258,6 +258,21 @@ header h1 {
   box-sizing: border-box;
 }
 
+/* Custom scrollbar for dropdown lists */
+.dropdown-list::-webkit-scrollbar {
+  width: 6px;
+}
+.dropdown-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.dropdown-list::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+}
+.dropdown-list::-webkit-scrollbar-thumb:hover {
+  background: var(--primary-color);
+}
+
 .dropdown-item {
   padding: 6px 10px;
   cursor: pointer;
@@ -571,4 +586,25 @@ textarea:focus {
 
 .toast-msg.show {
   opacity: 1;
+}
+
+/* Premium copy button styling */
+.btn-copy-output {
+  margin-top: 10px;
+  background-color: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-color);
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.btn-copy-output:hover {
+  background-color: var(--hover-bg);
+  border-color: var(--primary-color);
+  color: var(--primary-hover);
 }

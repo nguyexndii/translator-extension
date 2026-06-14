@@ -1,0 +1,20 @@
+{
+  "appName": {
+    "message": "Screen Translator"
+  },
+  "appDesc": {
+    "message": "Dịch vùng màn hình đã chọn hoặc văn bản được bôi đen bằng Gemini API."
+  },
+  "descExecuteAction": {
+    "message": "Mở giao diện dịch nhanh (Popup)"
+  },
+  "descTriggerTranslation": {
+    "message": "Bắt đầu chọn vùng màn hình để dịch"
+  },
+  "descTriggerTextTranslation": {
+    "message": "Dịch văn bản bôi đen trên trang web"
+  },
+  "descOpenHistory": {
+    "message": "Mở trang Lịch sử dịch thuật"
+  }
+}

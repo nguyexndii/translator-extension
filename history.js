@@ -14,7 +14,9 @@ const LOCALIZATION = {
     copySuccess: 'Đã sao chép bản dịch!',
     copyOriginalSuccess: 'Đã sao chép văn bản gốc!',
     deleteTitle: 'Xóa mục này',
-    copyTitle: 'Sao chép bản dịch'
+    copyTitle: 'Sao chép bản dịch',
+    doubleClickCopyOriginal: 'Nhấn đúp chuột để sao chép văn bản gốc',
+    doubleClickCopyTranslation: 'Nhấn đúp chuột để sao chép bản dịch'
   },
   en: {
     title: 'Translation History',
@@ -31,7 +33,9 @@ const LOCALIZATION = {
     copySuccess: 'Translation copied!',
     copyOriginalSuccess: 'Original text copied!',
     deleteTitle: 'Delete this item',
-    copyTitle: 'Copy translation'
+    copyTitle: 'Copy translation',
+    doubleClickCopyOriginal: 'Double click to copy original',
+    doubleClickCopyTranslation: 'Double click to copy translation'
   }
 };
 
@@ -252,8 +256,8 @@ document.addEventListener('DOMContentLoaded', () => {
           </div>
         </div>
         <div class="history-item-body">
-          <div class="history-original" title="Double click to copy original">${escapeHtml(item.original)}</div>
-          <div class="history-translated" title="Double click to copy translation">${escapeHtml(item.translated)}</div>
+          <div class="history-original" title="${dict.doubleClickCopyOriginal}">${escapeHtml(item.original)}</div>
+          <div class="history-translated" title="${dict.doubleClickCopyTranslation}">${escapeHtml(item.translated)}</div>
         </div>
       `;
 

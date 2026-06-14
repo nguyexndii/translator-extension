@@ -64,6 +64,11 @@
   align-items: flex-start !important;
   justify-content: flex-start !important;
   text-align: left !important;
+  transition: opacity 0.2s ease !important;
+}
+
+.gst-text-block:hover {
+  opacity: 0.15 !important;
 }
 
 /* Merged badge inside text block */
@@ -244,6 +249,14 @@
   line-height: 1.4 !important;
   color: #e0e0e0 !important;
   word-break: break-word !important;
+}
+
+.gst-toast-link {
+  transition: color 0.15s ease !important;
+}
+
+.gst-toast-link:hover {
+  color: #ffffff !important;
 }
 
 /* Premium Floating Translate Icon */
