@@ -232,6 +232,22 @@ document.addEventListener('DOMContentLoaded', () => {
       const tgtFull = getFullLanguageName(item.targetLang, currentUiLang);
       const formattedTime = item.timestamp ? new Date(item.timestamp).toLocaleString(currentUiLang === 'vi' ? 'vi-VN' : 'en-US') : '';
       
+      // Split original and translated text by lines
+      const origLines = (item.original || '').split('\n');
+      const transLines = (item.translated || '').split('\n');
+      const maxLines = Math.max(origLines.length, transLines.length);
+      
+      let origHtml = '';
+      let transHtml = '';
+      
+      for (let i = 0; i < maxLines; i++) {
+        const origText = origLines[i] || '';
+        const transText = transLines[i] || '';
+        
+        origHtml += `<div class="history-line-segment" data-index="${i}">${escapeHtml(origText) || '&nbsp;'}</div>`;
+        transHtml += `<div class="history-line-segment" data-index="${i}">${escapeHtml(transText) || '&nbsp;'}</div>`;
+      }
+
       itemEl.innerHTML = `
         <div class="history-item-header">
           <div class="history-item-meta">
@@ -256,8 +272,8 @@ document.addEventListener('DOMContentLoaded', () => {
           </div>
         </div>
         <div class="history-item-body">
-          <div class="history-original" title="${dict.doubleClickCopyOriginal}">${escapeHtml(item.original)}</div>
-          <div class="history-translated" title="${dict.doubleClickCopyTranslation}">${escapeHtml(item.translated)}</div>
+          <div class="history-original" title="${dict.doubleClickCopyOriginal}">${origHtml}</div>
+          <div class="history-translated" title="${dict.doubleClickCopyTranslation}">${transHtml}</div>
         </div>
       `;
 
@@ -278,6 +294,40 @@ document.addEventListener('DOMContentLoaded', () => {
 
       itemEl.querySelector('.history-translated').addEventListener('dblclick', () => {
         copyToClipboard(item.translated, dict.copySuccess);
+      });
+
+      // Hover Highlight Logic
+      const origDiv = itemEl.querySelector('.history-original');
+      const transDiv = itemEl.querySelector('.history-translated');
+      
+      const setHighlight = (index, highlight) => {
+        if (index === null || index === undefined) return;
+        const origSeg = origDiv.querySelector(`.history-line-segment[data-index="${index}"]`);
+        const transSeg = transDiv.querySelector(`.history-line-segment[data-index="${index}"]`);
+        if (origSeg) {
+          if (highlight) origSeg.classList.add('segment-highlight');
+          else origSeg.classList.remove('segment-highlight');
+        }
+        if (transSeg) {
+          if (highlight) transSeg.classList.add('segment-highlight');
+          else transSeg.classList.remove('segment-highlight');
+        }
+      };
+
+      itemEl.addEventListener('mouseover', (e) => {
+        const segment = e.target.closest('.history-line-segment');
+        if (segment) {
+          const index = segment.getAttribute('data-index');
+          setHighlight(index, true);
+        }
+      });
+      
+      itemEl.addEventListener('mouseout', (e) => {
+        const segment = e.target.closest('.history-line-segment');
+        if (segment) {
+          const index = segment.getAttribute('data-index');
+          setHighlight(index, false);
+        }
       });
 
       historyList.appendChild(itemEl);
@@ -372,6 +422,49 @@ document.addEventListener('DOMContentLoaded', () => {
         populateFilterOptions();
         renderHistory();
       }
+    }
+  });
+
+  // Global selection change listener for aligned highlights
+  document.addEventListener('selectionchange', () => {
+    const selection = window.getSelection();
+    
+    // Clear all segment-selected classes first
+    document.querySelectorAll('.history-line-segment.segment-selected').forEach(seg => {
+      seg.classList.remove('segment-selected');
+    });
+
+    if (!selection || selection.isCollapsed) return;
+
+    // Find parent history-item container
+    let anchorNode = selection.anchorNode;
+    let itemEl = null;
+    while (anchorNode) {
+      if (anchorNode.classList && anchorNode.classList.contains('history-item')) {
+        itemEl = anchorNode;
+        break;
+      }
+      anchorNode = anchorNode.parentNode;
+    }
+
+    if (!itemEl) return;
+
+    try {
+      const origDiv = itemEl.querySelector('.history-original');
+      const transDiv = itemEl.querySelector('.history-translated');
+      const segments = itemEl.querySelectorAll('.history-line-segment');
+      
+      segments.forEach(seg => {
+        if (selection.intersectsNode(seg)) {
+          const index = seg.getAttribute('data-index');
+          const origSeg = origDiv.querySelector(`.history-line-segment[data-index="${index}"]`);
+          const transSeg = transDiv.querySelector(`.history-line-segment[data-index="${index}"]`);
+          if (origSeg) origSeg.classList.add('segment-selected');
+          if (transSeg) transSeg.classList.add('segment-selected');
+        }
+      });
+    } catch (err) {
+      console.error('Error resolving selected segments:', err);
     }
   });
 });

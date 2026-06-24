@@ -354,6 +354,36 @@ body {
   white-space: pre-wrap;
 }
 
+.history-line-segment {
+  transition: background-color 0.15s ease, color 0.15s ease;
+  padding: 2px 4px;
+  margin: 1px 0;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+/* Hover highlight */
+.history-line-segment.segment-highlight {
+  background-color: rgba(138, 180, 248, 0.15) !important;
+}
+
+:root.light-mode .history-line-segment.segment-highlight {
+  background-color: rgba(106, 27, 154, 0.08) !important;
+}
+
+/* Selection highlight */
+.history-line-segment.segment-selected {
+  background-color: rgba(138, 180, 248, 0.3) !important;
+  border-left: 3px solid var(--primary-color);
+  padding-left: 1px;
+}
+
+:root.light-mode .history-line-segment.segment-selected {
+  background-color: rgba(106, 27, 154, 0.18) !important;
+  border-left: 3px solid var(--primary-color);
+  padding-left: 1px;
+}
+
 .history-original {
   background-color: rgba(255, 255, 255, 0.01);
   border: 1px dashed var(--border-color);
