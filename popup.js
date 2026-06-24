@@ -143,7 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  chrome.storage.local.get(['apiKeys', 'apiKey1', 'apiKey2', 'targetLang', 'uiLang', 'lastPopupInput', 'lastPopupOutput'], (result) => {
+  chrome.storage.local.get(['apiKeys', 'apiKey1', 'apiKey2', 'targetLang', 'uiLang'], (result) => {
     apiKeys = result.apiKeys || [];
     if (apiKeys.length === 0) {
       if (result.apiKey1) apiKeys.push(result.apiKey1);
@@ -162,19 +162,12 @@ document.addEventListener('DOMContentLoaded', () => {
       dropdown.setValue('Vietnamese');
     }
 
-    if (result.lastPopupInput) {
-      textInput.value = result.lastPopupInput;
-    }
-    if (result.lastPopupOutput) {
-      textOutputContainer.style.display = 'block';
-      renderTextOutput(result.lastPopupOutput);
-    }
+    // Clean up leftover cached input/output values
+    chrome.storage.local.remove(['lastPopupInput', 'lastPopupOutput']);
   });
 
   textInput.addEventListener('input', () => {
-    chrome.storage.local.set({ lastPopupInput: textInput.value });
     if (!textInput.value.trim()) {
-      chrome.storage.local.remove(['lastPopupOutput']);
       textOutputContainer.style.display = 'none';
       textOutput.textContent = '';
     }
@@ -304,7 +297,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (response) {
         if (response.success) {
           renderTextOutput(response.translatedText);
-          chrome.storage.local.set({ lastPopupOutput: response.translatedText });
         } else {
           renderTextError(response.error);
         }

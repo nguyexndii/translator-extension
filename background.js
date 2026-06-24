@@ -267,14 +267,17 @@ Use this context to accurately translate character/object names, coding terms, s
     {
       "box_2d": [ymin, xmin, ymax, xmax],
       "original_text": "text in original language",
-      "translated_text": "translated text"
+      "translated_text": "translated text",
+      "background_color_hex": "hex color code of the background behind the text (e.g., #FFFFFF)",
+      "text_color_hex": "hex color code of the original text (e.g., #000000)"
     }
   ]
 }
 Notes:
 - The box_2d coordinates must be normalized integers in range 0-1000 relative to this cropped image where [ymin, xmin, ymax, xmax] are top, left, bottom, right.
 - Translate contextually and place the translation inside translated_text.
-- For original_text, keep the original raw text.${contextPrompt}`;
+- For original_text, keep the original raw text.
+- For background_color_hex and text_color_hex, analyze the cropped image to detect the dominant background and text color of this specific block, returning valid hex codes.${contextPrompt}`;
 
   const payload = {
     contents: [
@@ -375,7 +378,7 @@ async function handleTextSelectionAndTranslation(tabId, selectedText, rect, cont
 - Page Title: "${context.pageTitle || ''}"
 Use this context to accurately translate character/object names, coding terms, slang, or media elements. If there are technical codes or special gaming terms, keep them in standard formats.` : '';
 
-    const prompt = `Translate the following highlighted text to ${targetLang}. Return a JSON object matching this schema:
+    const prompt = `Translate the following highlighted text to ${targetLang}. Preserve the exact paragraph structure, line breaks, and whitespace formatting of the original input text. Return a JSON object matching this schema:
 {
   "detected_source_language": "detected source language name in English (e.g., English, Japanese, French, etc.)",
   "translated_text": "translated text"
@@ -610,7 +613,7 @@ async function handleTextTranslationFromPopup(rawText, targetLang, sendResponse)
       return;
     }
 
-    const prompt = `Translate the following text to ${targetLang}. Return a JSON object matching this schema:
+    const prompt = `Translate the following text to ${targetLang}. Preserve the exact paragraph structure, line breaks, and whitespace formatting of the original input text. Return a JSON object matching this schema:
 {
   "detected_source_language": "detected source language name in English (e.g., English, Japanese, French, etc.)",
   "translated_text": "translated text"

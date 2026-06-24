@@ -474,10 +474,10 @@
   let activeDocumentClickListener = null;
 
   // Helper to make a DOM element draggable on mousedown/mousemove
-  function makeElementDraggable(el) {
+  function makeElementDraggable(el, handle = el) {
     let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
     
-    el.addEventListener('mousedown', dragMouseDown);
+    handle.addEventListener('mousedown', dragMouseDown);
 
     function dragMouseDown(e) {
       // Don't drag if user clicked input or is selecting text
@@ -485,6 +485,19 @@
       
       // Prevent text selection drag override
       e.preventDefault();
+
+      // Prevent transition / transform jumps by converting translate offset to absolute offsets
+      const rect = el.getBoundingClientRect();
+      let parentLeft = 0;
+      let parentTop = 0;
+      if (el.offsetParent) {
+        const parentRect = el.offsetParent.getBoundingClientRect();
+        parentLeft = parentRect.left;
+        parentTop = parentRect.top;
+      }
+      el.style.left = (rect.left - parentLeft) + 'px';
+      el.style.top = (rect.top - parentTop) + 'px';
+      el.style.transform = 'none'; // clear transform
 
       // Get mouse cursor position at start
       pos3 = e.clientX;
@@ -519,6 +532,11 @@
 
   function renderTranslation(data, rect, isText = false, pageScrollX = 0, pageScrollY = 0) {
     clearTranslation();
+
+    const isValidHexColor = (color) => {
+      if (!color || typeof color !== 'string') return false;
+      return /^#([0-9A-F]{3,4}|[0-9A-F]{6}|[0-9A-F]{8})$/i.test(color.trim());
+    };
 
     const dict = CONTENT_LOCALIZATION[currentUiLang] || CONTENT_LOCALIZATION.vi;
 
@@ -603,6 +621,10 @@
         block.style.maxWidth = '320px';
         block.style.minHeight = 'auto'; // Don't force massive height of vertical column
         block.style.height = 'auto';
+        
+        // Center the horizontal box relative to the original vertical column
+        block.style.left = (boxLeft + boxWidth / 2) + 'px';
+        block.style.transform = 'translateX(-50%)';
       } else {
         block.style.minWidth = boxWidth + 'px';
         block.style.maxWidth = Math.max(boxWidth * 1.5, 280) + 'px';
@@ -614,7 +636,7 @@
       // Cap at 13px/14px to keep text compact and aligned precisely
       let fontSize;
       if (isVerticalText) {
-        fontSize = Math.max(11, Math.min(origWidth * 0.85, 14));
+        fontSize = Math.max(12, Math.min(origWidth * 0.85, 15));
       } else if (isText) {
         fontSize = Math.max(10, Math.min(origHeight * 0.75, 13));
       } else {
@@ -625,17 +647,28 @@
       const textWrapper = document.createElement('span');
       textWrapper.textContent = item.translated_text;
 
+      let dragHandle = block;
       if (isText) {
         block.appendChild(textWrapper);
       } else {
         const innerContainer = document.createElement('div');
         innerContainer.className = 'gst-translation-block-inner';
+        
+        if (isValidHexColor(item.background_color_hex)) {
+          innerContainer.style.setProperty('--gst-bg-color', item.background_color_hex);
+          innerContainer.style.setProperty('--gst-border', 'none');
+        }
+        if (isValidHexColor(item.text_color_hex)) {
+          innerContainer.style.setProperty('--gst-text-color', item.text_color_hex);
+        }
+
         innerContainer.appendChild(textWrapper);
         block.appendChild(innerContainer);
+        dragHandle = innerContainer;
       }
 
       // Make it draggable
-      makeElementDraggable(block);
+      makeElementDraggable(block, dragHandle);
 
       // Click to close ONLY this block
       block.addEventListener('click', (e) => {
