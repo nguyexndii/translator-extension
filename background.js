@@ -18,7 +18,7 @@ function registerController(tabId) {
     try {
       activeControllers.get(tabId).abort();
     } catch (e) {
-      console.error('Error aborting previous request:', e);
+      console.warn('Error aborting previous request:', e);
     }
   }
   const controller = new AbortController();
@@ -52,28 +52,29 @@ async function triggerSelection(tabId, action) {
 
       await chrome.scripting.executeScript({
         target: { tabId: tabId },
-        files: ['content.js']
+        files: ['jsQR.js', 'content.js']
       });
 
       // Retry message
       await chrome.tabs.sendMessage(tabId, { action: action, uiLang: uiLang });
     } catch (injectErr) {
-      console.error('Dynamic injection failed:', injectErr);
+      console.warn('Dynamic injection failed:', injectErr);
     }
   }
 }
 
 // Listen for keyboard shortcuts defined in manifest
 chrome.commands.onCommand.addListener((command) => {
-  if (command === 'trigger-translation' || command === 'trigger-text-translation') {
+  if (command === 'trigger-translation' || command === 'trigger-text-translation' || command === 'trigger-qr-translation') {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs && tabs[0] && tabs[0].id) {
         // Prevent script injection errors on system pages
         if (isRestrictedUrl(tabs[0].url)) {
-          console.warn('Không thể dịch trên trang hệ thống:', tabs[0].url);
+          console.warn('Không thể chạy trên trang hệ thống:', tabs[0].url);
           return;
         }
-        triggerSelection(tabs[0].id, command);
+        const action = command === 'trigger-qr-translation' ? 'trigger-qr-selection' : command;
+        triggerSelection(tabs[0].id, action);
       }
     });
   } else if (command === 'open-history') {
@@ -89,7 +90,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       try {
         activeControllers.get(tabId).abort();
       } catch (e) {
-        console.error('Error aborting request via cancel message:', e);
+        console.warn('Error aborting request via cancel message:', e);
       }
       activeControllers.delete(tabId);
     }
@@ -127,6 +128,57 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.action === 'add-qr-to-history') {
+    addQrToHistory(message.type, message.content);
+    sendResponse({ status: 'added' });
+    return true;
+  }
+
+  if (message.action === 'start-auto-qr-scan') {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs && tabs[0] && tabs[0].id) {
+        if (isRestrictedUrl(tabs[0].url)) {
+          sendResponse({ error: 'Không thể chạy trên trang hệ thống.' });
+          return;
+        }
+        // Start automatic screen scan
+        handleAutoQrScan(tabs[0].id);
+        sendResponse({ status: 'auto-scan-initiated' });
+      } else {
+        sendResponse({ error: 'Không tìm thấy tab hoạt động.' });
+      }
+    });
+    return true; // async
+  }
+
+  if (message.action === 'start-qr-selection-mode') {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs && tabs[0] && tabs[0].id) {
+        if (isRestrictedUrl(tabs[0].url)) {
+          sendResponse({ error: 'Không thể chạy trên trang hệ thống.' });
+          return;
+        }
+        triggerSelection(tabs[0].id, 'trigger-qr-selection');
+        sendResponse({ status: 'initiated' });
+      } else {
+        sendResponse({ error: 'Không tìm thấy tab hoạt động.' });
+      }
+    });
+    return true; // async
+  }
+
+  if (message.action === 'process-qr-selection') {
+    const tabId = sender.tab.id;
+    const rect = message.rect;
+    const dpr = message.devicePixelRatio;
+    const pageScrollX = message.pageScrollX || 0;
+    const pageScrollY = message.pageScrollY || 0;
+
+    handleQrCropAndDecoding(tabId, rect, dpr, pageScrollX, pageScrollY);
+    sendResponse({ status: 'processing-qr' });
+    return true;
+  }
+
   if (message.action === 'process-text-selection') {
     const tabId = sender.tab.id;
     const rect = message.rect;
@@ -142,6 +194,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.action === 'translate-text-popup') {
     handleTextTranslationFromPopup(message.text, message.targetLang, sendResponse);
+    return true;
+  }
+
+  if (message.action === 'translate-image-popup') {
+    handleImageTranslationFromPopup(message.base64Data, message.targetLang, sendResponse);
     return true;
   }
 
@@ -163,7 +220,40 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 // Capture visible screen, crop it locally in content.js, and send it to Gemini API
+// Ensure the content script is active and loaded before sending messages
+async function ensureContentScriptActive(tabId) {
+  try {
+    // Send a ping to check if content script is ready
+    await new Promise((resolve, reject) => {
+      chrome.tabs.sendMessage(tabId, { action: 'ping' }, (response) => {
+        if (chrome.runtime.lastError || !response) {
+          reject(new Error('No response'));
+        } else {
+          resolve(response);
+        }
+      });
+    });
+  } catch (err) {
+    console.log('Content script not responding on tab, injecting dynamically...', err);
+    try {
+      await chrome.scripting.insertCSS({
+        target: { tabId: tabId },
+        files: ['content.css']
+      });
+      await chrome.scripting.executeScript({
+        target: { tabId: tabId },
+        files: ['jsQR.js', 'content.js']
+      });
+      // Short delay for script initialization
+      await new Promise(resolve => setTimeout(resolve, 80));
+    } catch (injectErr) {
+      console.warn('Dynamic injection failed:', injectErr);
+    }
+  }
+}
+
 async function handleCropAndTranslation(tabId, rect, dpr, context, pageScrollX = 0, pageScrollY = 0) {
+  await ensureContentScriptActive(tabId);
   const controller = registerController(tabId);
   try {
     const storage = await new Promise((resolve) => {
@@ -513,7 +603,7 @@ async function callGeminiAPI(url, payload, signal) {
   try {
     return JSON.parse(rawText.trim());
   } catch (parseErr) {
-    console.error('Failed to parse Gemini output as JSON:', rawText);
+    console.warn('Failed to parse Gemini output as JSON:', rawText);
     throw new Error('Mô hình không trả về định dạng JSON.');
   }
 }
@@ -590,6 +680,35 @@ function addToHistory(original, translated, sourceLang, targetLang) {
     }
     
     chrome.storage.local.set({ translationHistory: history });
+  });
+}
+
+function addQrToHistory(type, content) {
+  if (!content) return;
+  const contentClean = content.trim();
+
+  chrome.storage.local.get(['qrHistory'], (result) => {
+    let history = result.qrHistory || [];
+    
+    // Prevent duplicate consecutive entries of same content and type within last 10 entries to avoid spam
+    const exists = history.slice(0, 10).some(item => item.type === type && item.content === contentClean);
+    if (exists) {
+      history = history.filter(item => !(item.type === type && item.content === contentClean));
+    }
+    
+    const newItem = {
+      id: 'qr_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+      type: type, // 'scan' or 'generate'
+      content: contentClean,
+      timestamp: Date.now()
+    };
+    
+    history.unshift(newItem);
+    if (history.length > 200) {
+      history = history.slice(0, 200);
+    }
+    
+    chrome.storage.local.set({ qrHistory: history });
   });
 }
 
@@ -691,5 +810,308 @@ Input text:\n\n${rawText}`;
     }
   } catch (err) {
     sendResponse({ success: false, error: err.message });
+  }
+}
+
+async function handleImageTranslationFromPopup(base64Data, targetLang, sendResponse) {
+  try {
+    const storage = await new Promise((resolve) => {
+      chrome.storage.local.get(['apiKeys', 'uiLang'], (result) => {
+        resolve(result);
+      });
+    });
+
+    const apiKeys = storage.apiKeys || [];
+    const uiLang = storage.uiLang || 'en';
+
+    if (apiKeys.length === 0 || !apiKeys[0]) {
+      const errorNoKey = uiLang === 'en' 
+        ? 'Please configure API Keys in settings.' 
+        : 'Vui lòng cấu hình API Key trong tab cài đặt.';
+      sendResponse({ success: false, error: errorNoKey });
+      return;
+    }
+
+    const base64ImageBytes = base64Data.split(',')[1];
+    const mimeType = base64Data.split(',')[0].split(':')[1].split(';')[0] || 'image/jpeg';
+
+    const prompt = `Identify only actual written text characters visible in this image and translate them to ${targetLang}.
+CRITICAL INSTRUCTIONS:
+- Do NOT guess, describe, or hallucinate text.
+- Do NOT decode, translate, or describe QR codes, barcodes, icons, logos, or visual patterns. A QR code is NOT written text characters.
+- If there are no actual written text characters (letters, numbers, sentences) in the image, you MUST return empty strings "" for both "original_text" and "translated_text".
+- Do not make up text based on context (e.g., seeing a QR code does not mean there is text saying "Scan QR code").
+
+Return a JSON object matching this schema:
+{
+  "detected_source_language": "detected source language name in English (e.g., English, Japanese, French, etc.)",
+  "original_text": "all identified original text from the image, formatted with appropriate line breaks",
+  "translated_text": "the translated text, preserving the same line breaks and paragraph structure"
+}`;
+
+    const payload = {
+      contents: [
+        {
+          parts: [
+            {
+              inlineData: {
+                mimeType: mimeType,
+                data: base64ImageBytes
+              }
+            },
+            {
+              text: prompt
+            }
+          ]
+        }
+      ],
+      generationConfig: {
+        responseMimeType: 'application/json'
+      }
+    };
+
+    const modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=';
+
+    let apiCallSuccess = false;
+    let errorsCollected = [];
+    let translated = '';
+    let original = '';
+    let detectedSource = 'Auto';
+
+    for (let i = 0; i < apiKeys.length; i++) {
+      const key = apiKeys[i];
+      if (!key) continue;
+
+      try {
+        const response = await fetch(modelUrl + key, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error?.message || `HTTP ${response.status}`);
+        }
+
+        const resData = await response.json();
+        const rawResultText = resData.candidates?.[0]?.content?.parts?.[0]?.text;
+        
+        if (!rawResultText) {
+          throw new Error('Mã hình trả về rỗng.');
+        }
+
+        try {
+          const resJson = JSON.parse(rawResultText.trim());
+          translated = resJson.translated_text || '';
+          original = resJson.original_text || '';
+          detectedSource = resJson.detected_source_language || 'Auto';
+        } catch (parseErr) {
+          translated = rawResultText;
+        }
+
+        if (original.trim() && translated.trim()) {
+          addToHistory(original, translated, detectedSource, targetLang);
+        } else if (translated.trim()) {
+          addToHistory('Image Translation', translated, detectedSource, targetLang);
+        }
+        apiCallSuccess = true;
+        break;
+      } catch (err) {
+        console.warn(`API Key index ${i} failed in background image popup handler:`, err);
+        errorsCollected.push(`Key ${i + 1}: ${err.message}`);
+      }
+    }
+
+    if (apiCallSuccess) {
+      sendResponse({ success: true, translatedText: translated, originalText: original, detectedSource: detectedSource });
+    } else {
+      sendResponse({ success: false, error: `API error / Lỗi API:\n${errorsCollected.join('\n')}` });
+    }
+  } catch (err) {
+    sendResponse({ success: false, error: err.message });
+  }
+}
+
+
+// Capture visible screen, crop it locally in content.js, and decode QR
+async function handleQrCropAndDecoding(tabId, rect, dpr, pageScrollX = 0, pageScrollY = 0) {
+  await ensureContentScriptActive(tabId);
+  const controller = registerController(tabId);
+  try {
+    const storage = await new Promise((resolve) => {
+      chrome.storage.local.get(['uiLang'], (result) => resolve(result));
+    });
+    const uiLang = storage.uiLang || 'en';
+    const loadingText = uiLang === 'en' ? 'Scanning QR...' : 'Đang quét QR...';
+
+    chrome.tabs.sendMessage(tabId, { action: 'show-loading', text: loadingText });
+
+    if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
+
+    // Capture the entire visible viewport
+    const fullScreenshotBase64 = await chrome.tabs.captureVisibleTab(null, {
+      format: 'jpeg',
+      quality: 85
+    });
+
+    if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
+
+    // Send to content script to crop and decode QR
+    chrome.tabs.sendMessage(tabId, {
+      action: 'crop-and-decode-qr',
+      base64Data: fullScreenshotBase64,
+      rect: rect,
+      devicePixelRatio: dpr
+    }, (response) => {
+      try {
+        if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
+
+        if (!response) {
+          const errNoResp = uiLang === 'en' ? 'Failed to communicate with the webpage.' : 'Không thể kết nối với trang web.';
+          chrome.tabs.sendMessage(tabId, { action: 'show-error', error: errNoResp });
+          return;
+        }
+
+        if (response.error) {
+          chrome.tabs.sendMessage(tabId, { action: 'show-error', error: response.error });
+          return;
+        }
+
+        const qrResult = response.result;
+        if (qrResult && qrResult.success) {
+          if (qrResult.codes && qrResult.codes.length > 1) {
+            // Add to QR history
+            qrResult.codes.forEach(code => {
+              addQrToHistory('scan', code.text);
+            });
+            // Render multiple QR results if multiple QR codes were found in selection
+            chrome.tabs.sendMessage(tabId, {
+              action: 'render-multiple-qr-results',
+              codes: qrResult.codes,
+              devicePixelRatio: qrResult.devicePixelRatio || 1,
+              pageScrollX: pageScrollX,
+              pageScrollY: pageScrollY
+            });
+          } else {
+            // Single QR result
+            addQrToHistory('scan', qrResult.text);
+            chrome.tabs.sendMessage(tabId, {
+              action: 'render-qr-result',
+              text: qrResult.text,
+              rect: rect,
+              pageScrollX: pageScrollX,
+              pageScrollY: pageScrollY
+            });
+          }
+        } else {
+          const errorMsg = qrResult && qrResult.error 
+            ? qrResult.error 
+            : (uiLang === 'en' ? 'No QR code found in selection.' : 'Không tìm thấy mã QR trong vùng chọn.');
+          chrome.tabs.sendMessage(tabId, { action: 'show-error', error: errorMsg });
+        }
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+        chrome.tabs.sendMessage(tabId, { action: 'show-error', error: err.message });
+      } finally {
+        clearController(tabId, controller);
+      }
+    });
+
+  } catch (err) {
+    if (err.name === 'AbortError') return;
+    chrome.tabs.sendMessage(tabId, { action: 'show-error', error: err.message });
+    clearController(tabId, controller);
+  }
+}
+
+async function handleAutoQrScan(tabId) {
+  await ensureContentScriptActive(tabId);
+  const controller = registerController(tabId);
+  try {
+    const storage = await new Promise((resolve) => {
+      chrome.storage.local.get(['uiLang'], (result) => resolve(result));
+    });
+    const uiLang = storage.uiLang || 'en';
+    const loadingText = uiLang === 'en' ? 'Scanning screen for QR...' : 'Đang quét QR trên màn hình...';
+
+    chrome.tabs.sendMessage(tabId, { action: 'show-loading', text: loadingText });
+
+    if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
+
+    // Wait 300ms for popup to close completely and page to redraw
+    await new Promise((resolve) => setTimeout(resolve, 150));
+
+    if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
+
+    // Capture the entire visible viewport of the active tab
+    const fullScreenshotBase64 = await chrome.tabs.captureVisibleTab(null, {
+      format: 'jpeg',
+      quality: 85
+    });
+
+    if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
+
+    // Send full screen screenshot to content script to decode automatically
+    chrome.tabs.sendMessage(tabId, {
+      action: 'auto-decode-qr',
+      base64Data: fullScreenshotBase64
+    }, (response) => {
+      try {
+        if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
+
+        if (!response) {
+          const errNoResp = uiLang === 'en' ? 'Failed to communicate with the webpage.' : 'Không thể kết nối với trang web.';
+          chrome.tabs.sendMessage(tabId, { action: 'show-error', error: errNoResp });
+          return;
+        }
+
+        if (response.error) {
+          chrome.tabs.sendMessage(tabId, { action: 'show-error', error: response.error });
+          return;
+        }
+
+        const qrResult = response.result;
+        if (qrResult && qrResult.success && qrResult.codes && qrResult.codes.length > 0) {
+          // Add to QR history
+          qrResult.codes.forEach(code => {
+            addQrToHistory('scan', code.text);
+          });
+          // Send render message for multiple QR codes
+          chrome.tabs.sendMessage(tabId, {
+            action: 'render-multiple-qr-results',
+            codes: qrResult.codes,
+            devicePixelRatio: qrResult.devicePixelRatio || 1,
+            pageScrollX: qrResult.pageScrollX || 0,
+            pageScrollY: qrResult.pageScrollY || 0
+          });
+        } else {
+          // Automatic scanning failed to find a QR code.
+          // Show a toast message, then automatically trigger manual selection mode!
+          const noticeMsg = uiLang === 'en' 
+            ? 'No QR found automatically. Please draw a box to scan.' 
+            : 'Không tìm thấy QR tự động. Hãy vẽ vùng chọn chứa mã QR!';
+          
+          chrome.tabs.sendMessage(tabId, { action: 'show-error', error: noticeMsg });
+          
+          // Wait 2s for the toast to be readable, then start selection mode
+          setTimeout(() => {
+            triggerSelection(tabId, 'trigger-qr-selection');
+          }, 2000);
+        }
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+        chrome.tabs.sendMessage(tabId, { action: 'show-error', error: err.message });
+      } finally {
+        clearController(tabId, controller);
+      }
+    });
+
+  } catch (err) {
+    if (err.name === 'AbortError') return;
+    chrome.tabs.sendMessage(tabId, { action: 'show-error', error: err.message });
+    clearController(tabId, controller);
   }
 }

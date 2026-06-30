@@ -17,14 +17,6 @@
   "background": {
     "service_worker": "background.js"
   },
-  "content_scripts": [
-    {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"],
-      "css": ["content.css"],
-      "all_frames": true
-    }
-  ],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
@@ -64,12 +56,12 @@
       },
       "description": "__MSG_descTriggerTextTranslation__"
     },
-    "open-history": {
+    "trigger-qr-translation": {
       "suggested_key": {
-        "default": "Alt+Shift+H",
-        "mac": "Alt+Shift+H"
+        "default": "Alt+Shift+Q",
+        "mac": "Alt+Shift+Q"
       },
-      "description": "__MSG_descOpenHistory__"
+      "description": "Chụp quét mã QR trên màn hình"
     }
   }
 }

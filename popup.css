@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   --primary-color: #a8b8ff;
   --primary-hover: #c5cfff;
   --bg-color: #121212;
@@ -250,10 +250,23 @@ header h1 {
   background-color: var(--input-bg);
   color: var(--text-color);
   box-sizing: border-box;
-  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' fill='none' stroke='%235f6368' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 3.5l3 3 3-3'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 8px center;
-  background-size: 8px;
+}
+
+.searchable-dropdown .dropdown-arrow {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%) rotate(0deg);
+  transition: transform 0.2s ease;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  color: var(--text-light);
+}
+
+.searchable-dropdown:focus-within .dropdown-arrow {
+  transform: translateY(-50%) rotate(180deg);
+  color: var(--primary-color);
 }
 
 #targetLangSearch:focus {
@@ -351,6 +364,52 @@ textarea:focus {
   background-color: var(--hover-bg);
   color: var(--primary-color);
   border-color: var(--primary-color);
+}
+
+/* Image preview in translator tab */
+.image-preview-container {
+  position: relative;
+  width: 100%;
+  min-height: 72px;
+  max-height: 160px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background-color: var(--input-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: 4px;
+}
+
+.image-preview {
+  max-width: 100%;
+  max-height: 150px;
+  object-fit: contain;
+}
+
+.btn-remove-image {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: rgba(0, 0, 0, 0.6);
+  border: none;
+  border-radius: 50%;
+  color: #ffffff;
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+  padding: 0;
+  z-index: 10;
+}
+
+.btn-remove-image:hover {
+  background: rgba(0, 0, 0, 0.85);
 }
 
 .btn-secondary-action {
@@ -626,3 +685,424 @@ textarea:focus {
   border-color: var(--primary-color);
   color: var(--primary-hover);
 }
+
+/* QR Scanner Styling */
+.action-section.qr-section {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+  margin-bottom: 12px !important;
+}
+
+.qr-buttons-row {
+  display: flex !important;
+  gap: 8px !important;
+  width: 100% !important;
+}
+
+.qr-buttons-row button {
+  flex: 1 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 38px !important;
+  margin-top: 0 !important;
+  padding: 0 !important;
+  font-size: 12.5px !important;
+  white-space: nowrap !important;
+  font-family: inherit !important;
+}
+
+.qr-upload-zone {
+  border: 2px dashed var(--border-color);
+  border-radius: var(--radius);
+  padding: 14px 10px;
+  text-align: center;
+  background-color: var(--input-bg);
+  cursor: pointer;
+  transition: all 0.25s ease;
+  user-select: none;
+}
+
+.qr-upload-zone:hover, .qr-upload-zone.dragover {
+  border-color: var(--primary-color);
+  background-color: var(--hover-bg);
+}
+
+.upload-prompt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-color);
+}
+
+.upload-prompt span {
+  font-size: 11.5px;
+  font-weight: 500;
+  margin-top: 4px;
+  color: var(--text-light);
+  line-height: 1.3;
+}
+
+.qr-upload-zone:hover .upload-prompt span,
+.qr-upload-zone.dragover .upload-prompt span {
+  color: var(--primary-hover);
+}
+
+/* QR Code Result Inside Popup Upload Zone */
+.qr-result-view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.qr-result-header {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  margin-bottom: 8px !important;
+  font-weight: 600 !important;
+  color: #4caf50 !important;
+  font-size: 13px !important;
+}
+
+.qr-result-text {
+  width: 100% !important;
+  max-height: 80px !important;
+  overflow-y: auto !important;
+  background-color: var(--input-bg) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 4px !important;
+  padding: 8px !important;
+  font-size: 12px !important;
+  color: var(--text-color) !important;
+  word-break: break-all !important;
+  text-align: left !important;
+  margin-bottom: 10px !important;
+  user-select: text !important;
+  box-sizing: border-box !important;
+}
+
+.qr-result-text::-webkit-scrollbar {
+  width: 4px !important;
+}
+.qr-result-text::-webkit-scrollbar-thumb {
+  background: var(--border-color) !important;
+  border-radius: 2px !important;
+}
+
+.qr-result-actions {
+  display: flex !important;
+  gap: 8px !important;
+  justify-content: center !important;
+  width: 100% !important;
+  flex-wrap: wrap !important;
+}
+
+.qr-result-btn {
+  background-color: var(--input-bg) !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-color) !important;
+  padding: 4px 10px !important;
+  border-radius: 4px !important;
+  font-size: 11px !important;
+  cursor: pointer !important;
+  font-weight: 500 !important;
+  transition: all 0.2s ease !important;
+  font-family: inherit !important;
+}
+
+.qr-result-btn:hover {
+  background-color: var(--hover-bg) !important;
+  border-color: var(--text-light) !important;
+}
+
+.qr-result-btn.copy-btn {
+  background-color: #3b82f6 !important;
+  border-color: #3b82f6 !important;
+  color: #ffffff !important;
+}
+
+.qr-result-btn.copy-btn:hover {
+  background-color: #2563eb !important;
+  border-color: #2563eb !important;
+}
+
+.qr-result-btn.open-btn {
+  background-color: #4caf50 !important;
+  border-color: #4caf50 !important;
+  color: #ffffff !important;
+}
+
+.qr-result-btn.open-btn:hover {
+  background-color: #388e3c !important;
+  border-color: #388e3c !important;
+}
+
+/* Tabs Navigation Styling */
+.tabs-nav {
+  display: flex !important;
+  border-bottom: 1px solid var(--border-color) !important;
+  margin-bottom: 12px !important;
+  background: rgba(255, 255, 255, 0.02) !important;
+  margin-top: -6px !important;
+}
+
+.tab-btn {
+  flex: 1 !important;
+  padding: 10px 0 !important;
+  background: transparent !important;
+  border: none !important;
+  border-bottom: 2px solid transparent !important;
+  color: var(--text-light) !important;
+  font-family: inherit !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  outline: none !important;
+  text-align: center !important;
+}
+
+.tab-btn:hover {
+  color: var(--primary-color) !important;
+}
+
+.tab-btn.active {
+  color: var(--primary-color) !important;
+  border-bottom-color: var(--primary-color) !important;
+  background: rgba(138, 180, 248, 0.05) !important;
+}
+
+/* QR Code Generator Styling */
+.qr-generator-section {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+  margin-top: 10px !important;
+}
+
+.qr-gen-result-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 14px;
+  padding: 12px;
+  background-color: var(--input-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  box-sizing: border-box;
+}
+
+.qr-gen-result-title {
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  color: var(--text-light) !important;
+  margin-bottom: 8px !important;
+}
+
+.qr-gen-result-image {
+  margin-bottom: 12px !important;
+  padding: 8px !important;
+  background: #ffffff !important;
+  border-radius: 6px !important;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1) !important;
+}
+
+.qr-gen-result-image img {
+  display: block !important;
+}
+
+.qr-gen-result-actions {
+  display: flex !important;
+  width: 100% !important;
+  justify-content: center !important;
+}
+
+/* Copy QR button inside text frame */
+.qr-result-text-container {
+  position: relative !important;
+  width: 100% !important;
+  margin-bottom: 8px !important;
+  box-sizing: border-box !important;
+}
+
+.qr-result-text {
+  width: 100% !important;
+  max-height: 80px !important;
+  overflow-y: auto !important;
+  padding: 8px 38px 8px 8px !important; /* Right padding to make room for copy button */
+  border: 1px solid var(--border-color) !important;
+  border-radius: var(--radius) !important;
+  font-size: 12px !important;
+  background-color: var(--input-bg) !important;
+  color: var(--text-color) !important;
+  box-sizing: border-box !important;
+  text-align: left !important;
+  word-break: break-all !important;
+  white-space: pre-wrap !important;
+}
+
+.btn-copy-qr-text {
+  position: absolute !important;
+  right: 4px !important;
+  top: 3px !important;
+  background: var(--input-bg) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 4px !important;
+  color: var(--text-light) !important;
+  width: 26px !important;
+  height: 26px !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: all 0.2s ease !important;
+  padding: 0 !important;
+  box-sizing: border-box !important;
+  z-index: 10;
+  line-height: 0 !important;
+  font-size: 0 !important;
+}
+
+.btn-copy-qr-text svg {
+  display: block !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 14px !important;
+  height: 14px !important;
+  flex-shrink: 0 !important;
+}
+
+.btn-copy-qr-text:hover {
+  background-color: var(--hover-bg) !important;
+  color: var(--primary-color) !important;
+  border-color: var(--primary-color) !important;
+}
+
+/* Premium Error Toast Banner overlay */
+.error-toast {
+  position: fixed !important;
+  top: -150px !important; /* Hidden by default */
+  left: 12px !important;
+  right: 12px !important;
+  background: rgba(20, 20, 22, 0.96) !important;
+  backdrop-filter: blur(20px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+  border: 1px solid rgba(255, 82, 82, 0.22) !important;
+  padding: 12px 14px !important;
+  border-radius: 12px !important;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6), 0 0 20px rgba(255, 82, 82, 0.06), inset 0 1px 0 0 rgba(255, 255, 255, 0.05) !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: flex-start !important;
+  gap: 12px !important;
+  z-index: 99999 !important;
+  box-sizing: border-box !important;
+  transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1) !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+.error-toast.show {
+  top: 54px !important; /* Positions just below the header actions */
+  opacity: 1 !important;
+  visibility: visible !important;
+  animation: error-shake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) both !important;
+}
+
+.error-toast-badge {
+  background: rgba(255, 82, 82, 0.12) !important;
+  border-radius: 50% !important;
+  width: 30px !important;
+  height: 30px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+  border: 1px solid rgba(255, 82, 82, 0.15) !important;
+}
+
+.error-toast-badge svg {
+  display: block !important;
+  width: 15px !important;
+  height: 15px !important;
+}
+
+.error-toast-content {
+  flex: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+}
+
+.error-toast-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  user-select: none !important;
+}
+
+.error-toast-title {
+  font-weight: 700 !important;
+  font-size: 13px !important;
+  color: #ff5252 !important;
+  font-family: inherit !important;
+  letter-spacing: 0.2px !important;
+}
+
+.error-toast-close {
+  font-size: 16px !important;
+  cursor: pointer !important;
+  color: rgba(255, 255, 255, 0.4) !important;
+  transition: all 0.2s ease !important;
+  line-height: 1 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 18px !important;
+  height: 18px !important;
+  border-radius: 50% !important;
+}
+
+.error-toast-close:hover {
+  color: #ffffff !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.error-toast-text {
+  font-size: 11.5px !important;
+  line-height: 1.4 !important;
+  color: #d0d0d5 !important;
+  text-align: left !important;
+  font-family: inherit !important;
+  word-break: break-word !important;
+}
+
+.error-toast-link {
+  color: #ff5252 !important;
+  text-decoration: none !important;
+  font-weight: 600 !important;
+  margin-left: 8px !important;
+  cursor: pointer !important;
+  border-bottom: 1px dashed rgba(255, 82, 82, 0.5) !important;
+  transition: all 0.2s ease !important;
+  display: inline-block !important;
+}
+
+.error-toast-link:hover {
+  color: #ff8a8a !important;
+  border-bottom-color: #ff8a8a !important;
+}
+
+@keyframes error-shake {
+  0% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  50% { transform: translateX(4px); }
+  75% { transform: translateX(-2px); }
+  100% { transform: translateX(0); }
+}
+
