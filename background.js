@@ -1,3 +1,58 @@
+// Central Gemini AI Model Configuration
+const GEMINI_MODELS = [
+  'gemini-3.1-flash-lite'
+];
+
+function buildMasterTranslationPrompt(text, targetLang, context = null) {
+  const contextStr = context ? `\n\nWEBPAGE SOURCE CONTEXT:
+- Domain: "${context.domain || ''}"
+- Page Title: "${context.pageTitle || ''}"` : '';
+
+  return `You are an elite, context-aware expert translator. Your mission is to translate the input text into natural, fluent, and highly accurate ${targetLang}.
+
+CONTEXT ANALYSIS & DOMAIN ADAPTATION INSTRUCTIONS:
+1. DOMAIN IDENTIFICATION: First analyze the domain of the input (e.g. Gaming/Esports, Tech/Programming, Anime/Manga, Internet Memes, Business, Literature, Casual Chat). Adapt terminology, tone, and phrasing specifically for that domain.
+2. GAMING & ESPORTS (FPS/MOBA/RPG):
+   - "flash" in gaming/FPS context refers to flashbang/blind skills ("quả mù", "chiêu mù", "flash"), NOT "lướt" (dash).
+   - "dash" refers to mobility skills ("lướt", "tốc biến lướt").
+   - "ult" / "ultimate" = "chiêu cuối" / "ult". "cooldown" = "hồi chiêu".
+   - Keep agent/hero/champion names (e.g., Yoru, Jett, Reyna, Ahri), item names, and standard gaming jargon natural in gaming parlance.
+3. PROGRAMMING & TECH: Keep code syntax, variable names, API endpoints, function names, and technical terms intact or standard in technical Vietnamese.
+4. SLANG & IDIOMS: Do NOT translate idioms or slang word-for-word. Translate the true figurative meaning into natural, conversational ${targetLang}.
+5. FORMATTING: Preserve all exact paragraph structures, line breaks, code snippets, and whitespace formatting.
+
+Return a JSON object with schema:
+{
+  "detected_source_language": "detected source language in English (e.g. English, Japanese)",
+  "translated_text": "translated text"
+}${contextStr}
+
+INPUT TEXT TO TRANSLATE:
+${text}`;
+}
+
+function getGeminiModelUrl(apiKey, modelName = GEMINI_MODELS[0]) {
+  return `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
+}
+
+async function callGeminiApiWithFallback(apiKey, payload, signal) {
+  let lastErr = null;
+  for (const model of GEMINI_MODELS) {
+    try {
+      const url = getGeminiModelUrl(apiKey, model);
+      return await callGeminiAPI(url, payload, signal);
+    } catch (err) {
+      lastErr = err;
+      if (err.message && (err.message.includes('404') || err.message.includes('not found') || err.message.includes('not supported') || err.message.includes('HTTP 404'))) {
+        console.warn(`Gemini Model ${model} not available for key, attempting fallback model...`);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr;
+}
+
 // Helper to check if a URL is restricted by Chrome extension security policies
 function isRestrictedUrl(url) {
   if (!url) return true;
@@ -349,25 +404,25 @@ async function executeGeminiImageTranslation(tabId, croppedBase64, rect, context
 - Page Title: "${context.pageTitle || ''}"
 Use this context to accurately translate character/object names, coding terms, slang, or media elements. If there are technical codes or special gaming terms, keep them in standard formats.` : '';
 
-  // Construct request payload
-  const prompt = `Locate and translate all text in this cropped image to ${targetLang}. Return JSON output matching this schema:
+  // Construct ultra-fast request payload with gaming & slang context
+  const prompt = `Translate all visible text in this image to ${targetLang}.
+TRANSLATION QUALITY INSTRUCTIONS:
+- Translate accurately into natural, context-aware ${targetLang}.
+- Recognize gaming terminology (Valorant, CS:GO, LoL, FPS/MOBA/RPGs), anime, tech terms, and internet memes:
+  * "flash" in gaming/FPS context refers to flashbang/blind ability ("quả mù", "chiêu mù", or "flash"), NOT "lướt" (dash).
+  * "dash" refers to mobility skills ("lướt").
+  * Keep character names (e.g. Yoru, Jett, Reyna), item/skill names, and gaming slang in standard gaming terminology.
+Return JSON matching schema:
 {
-  "detected_source_language": "detected source language name in English (e.g., English, Japanese, French, etc.)",
+  "detected_source_language": "Language Name",
   "translations": [
     {
-      "box_2d": [ymin, xmin, ymax, xmax],
-      "original_text": "text in original language",
-      "translated_text": "translated text",
-      "background_color_hex": "hex color code of the background behind the text (e.g., #FFFFFF)",
-      "text_color_hex": "hex color code of the original text (e.g., #000000)"
+      "box_2d": [0, 0, 1000, 1000],
+      "original_text": "original text",
+      "translated_text": "translated text"
     }
   ]
-}
-Notes:
-- The box_2d coordinates must be normalized integers in range 0-1000 relative to this cropped image where [ymin, xmin, ymax, xmax] are top, left, bottom, right.
-- Translate contextually and place the translation inside translated_text.
-- For original_text, keep the original raw text.
-- For background_color_hex and text_color_hex, analyze the cropped image to detect the dominant background and text color of this specific block, returning valid hex codes.${contextPrompt}`;
+}${contextPrompt}`;
 
   const payload = {
     contents: [
@@ -390,9 +445,6 @@ Notes:
     }
   };
 
-  const modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=';
-
-  // Rotation call
   let callSuccess = false;
   let errorMsgs = [];
 
@@ -401,7 +453,7 @@ Notes:
     if (!key) continue;
 
     try {
-      const data = await callGeminiAPI(modelUrl + key, payload, signal);
+      const data = await callGeminiApiWithFallback(key, payload, signal);
       data.target_language = targetLang;
 
       // Add to translation history by combining all detected text blocks
@@ -463,17 +515,7 @@ async function handleTextSelectionAndTranslation(tabId, selectedText, rect, cont
       return;
     }
 
-    const contextPrompt = context ? `\n\nWebpage context:
-- Website Domain: "${context.domain || ''}"
-- Page Title: "${context.pageTitle || ''}"
-Use this context to accurately translate character/object names, coding terms, slang, or media elements. If there are technical codes or special gaming terms, keep them in standard formats.` : '';
-
-    const prompt = `Translate the following highlighted text to ${targetLang}. Preserve the exact paragraph structure, line breaks, and whitespace formatting of the original input text. Return a JSON object matching this schema:
-{
-  "detected_source_language": "detected source language name in English (e.g., English, Japanese, French, etc.)",
-  "translated_text": "translated text"
-}
-Input text:\n\n${selectedText}${contextPrompt}`;
+    const prompt = buildMasterTranslationPrompt(selectedText, targetLang, context);
 
     const payload = {
       contents: [
@@ -490,8 +532,6 @@ Input text:\n\n${selectedText}${contextPrompt}`;
       }
     };
 
-    const modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=';
-
     let callSuccess = false;
     let errorMsgs = [];
 
@@ -500,48 +540,25 @@ Input text:\n\n${selectedText}${contextPrompt}`;
       if (!key) continue;
 
       try {
-        const response = await fetch(modelUrl + key, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(payload),
-          signal: signal
-        });
+        const data = await callGeminiApiWithFallback(key, payload, signal);
+        const translatedText = data.translated_text || '';
+        const detectedSourceLang = data.detected_source_language || 'Auto';
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error?.message || `HTTP ${response.status}`);
-        }
-
-        const resData = await response.json();
-        const rawText = resData.candidates?.[0]?.content?.parts?.[0]?.text;
-        
-        if (!rawText) {
-          throw new Error('Mô hình trả về rỗng.');
-        }
-
-        let resJson;
-        try {
-          resJson = JSON.parse(rawText.trim());
-        } catch (parseErr) {
-          throw new Error('Mô hình không trả về định dạng JSON.');
+        if (selectedText.trim() && translatedText.trim()) {
+          addToHistory(selectedText, translatedText, detectedSourceLang, targetLang);
         }
 
         const structuredData = {
-          detected_source_language: resJson.detected_source_language,
+          detected_source_language: detectedSourceLang,
           target_language: targetLang,
           translations: [
             {
               box_2d: [0, 0, 1000, 1000],
               original_text: selectedText,
-              translated_text: resJson.translated_text
+              translated_text: translatedText
             }
           ]
         };
-
-        // Add to translation history
-        addToHistory(selectedText, resJson.translated_text, resJson.detected_source_language, targetLang);
 
         chrome.tabs.sendMessage(tabId, { action: 'render-translation', data: structuredData, rect: rect, isText: true, pageScrollX: pageScrollX, pageScrollY: pageScrollY });
         callSuccess = true;
@@ -574,37 +591,55 @@ Input text:\n\n${selectedText}${contextPrompt}`;
   }
 }
 
-// Fetch helper that parses Gemini JSON response
-async function callGeminiAPI(url, payload, signal) {
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(payload),
-    signal: signal
-  });
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    const errorMessage = errorData.error?.message || `HTTP ${response.status} ${response.statusText}`;
-    throw new Error(errorMessage);
+// Fetch helper that parses Gemini JSON response with 15s timeout
+async function callGeminiAPI(url, payload, externalSignal) {
+  // Combine externalSignal with a 15s timeout signal so fetch never hangs forever
+  const timeoutController = new AbortController();
+  const timeoutId = setTimeout(() => timeoutController.abort(), 15000);
+  
+  if (externalSignal) {
+    externalSignal.addEventListener('abort', () => timeoutController.abort());
   }
 
-  const resData = await response.json();
-  const candidates = resData.candidates;
-  
-  if (!candidates || candidates.length === 0 || !candidates[0].content?.parts?.[0]?.text) {
-    throw new Error('Mô hình không trả về nội dung hợp lệ.');
-  }
-
-  const rawText = candidates[0].content.parts[0].text;
-  
   try {
-    return JSON.parse(rawText.trim());
-  } catch (parseErr) {
-    console.warn('Failed to parse Gemini output as JSON:', rawText);
-    throw new Error('Mô hình không trả về định dạng JSON.');
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload),
+      signal: timeoutController.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const errorMessage = errorData.error?.message || `HTTP ${response.status} ${response.statusText}`;
+      throw new Error(errorMessage);
+    }
+
+    const resData = await response.json();
+    const candidates = resData.candidates;
+    
+    if (!candidates || candidates.length === 0 || !candidates[0].content?.parts?.[0]?.text) {
+      throw new Error('Mô hình không trả về nội dung hợp lệ.');
+    }
+
+    const rawText = candidates[0].content.parts[0].text;
+    
+    try {
+      return JSON.parse(rawText.trim());
+    } catch (parseErr) {
+      console.warn('Failed to parse Gemini output as JSON:', rawText);
+      throw new Error('Mô hình không trả về định dạng JSON.');
+    }
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      throw new Error('Yêu cầu dịch đã quá thời gian phản hồi (Timeout 15s). Vui lòng kiểm tra kết nối mạng hoặc API Key.');
+    }
+    throw err;
   }
 }
 
@@ -724,12 +759,7 @@ async function handleTextTranslationFromPopup(rawText, targetLang, sendResponse)
       return;
     }
 
-    const prompt = `Translate the following text to ${targetLang}. Preserve the exact paragraph structure, line breaks, and whitespace formatting of the original input text. Return a JSON object matching this schema:
-{
-  "detected_source_language": "detected source language name in English (e.g., English, Japanese, French, etc.)",
-  "translated_text": "translated text"
-}
-Input text:\n\n${rawText}`;
+    const prompt = buildMasterTranslationPrompt(rawText, targetLang, null);
 
     const payload = {
       contents: [
@@ -746,8 +776,6 @@ Input text:\n\n${rawText}`;
       }
     };
 
-    const modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=';
-
     let apiCallSuccess = false;
     let errorsCollected = [];
     let translated = '';
@@ -758,33 +786,9 @@ Input text:\n\n${rawText}`;
       if (!key) continue;
 
       try {
-        const response = await fetch(modelUrl + key, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error?.message || `HTTP ${response.status}`);
-        }
-
-        const resData = await response.json();
-        const rawResultText = resData.candidates?.[0]?.content?.parts?.[0]?.text;
-        
-        if (!rawResultText) {
-          throw new Error('Mô hình trả về rỗng.');
-        }
-
-        try {
-          const resJson = JSON.parse(rawResultText.trim());
-          translated = resJson.translated_text || rawResultText;
-          detectedSource = resJson.detected_source_language || 'Auto';
-        } catch (parseErr) {
-          translated = rawResultText;
-        }
+        const resJson = await callGeminiApiWithFallback(key, payload, null);
+        translated = resJson.translated_text || '';
+        detectedSource = resJson.detected_source_language || 'Auto';
 
         addToHistory(rawText, translated, detectedSource, targetLang);
         apiCallSuccess = true;
@@ -862,8 +866,6 @@ Return a JSON object matching this schema:
       }
     };
 
-    const modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=';
-
     let apiCallSuccess = false;
     let errorsCollected = [];
     let translated = '';
@@ -875,34 +877,10 @@ Return a JSON object matching this schema:
       if (!key) continue;
 
       try {
-        const response = await fetch(modelUrl + key, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error?.message || `HTTP ${response.status}`);
-        }
-
-        const resData = await response.json();
-        const rawResultText = resData.candidates?.[0]?.content?.parts?.[0]?.text;
-        
-        if (!rawResultText) {
-          throw new Error('Mã hình trả về rỗng.');
-        }
-
-        try {
-          const resJson = JSON.parse(rawResultText.trim());
-          translated = resJson.translated_text || '';
-          original = resJson.original_text || '';
-          detectedSource = resJson.detected_source_language || 'Auto';
-        } catch (parseErr) {
-          translated = rawResultText;
-        }
+        const resJson = await callGeminiApiWithFallback(key, payload, null);
+        translated = resJson.translated_text || '';
+        original = resJson.original_text || '';
+        detectedSource = resJson.detected_source_language || 'Auto';
 
         if (original.trim() && translated.trim()) {
           addToHistory(original, translated, detectedSource, targetLang);

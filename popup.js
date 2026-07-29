@@ -354,7 +354,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (window.errorToastTimeout) clearTimeout(window.errorToastTimeout);
       window.errorToastTimeout = setTimeout(() => {
         errorToast.classList.remove('show');
-      }, 5000);
+      }, 3000);
     } else {
       statusMsg.textContent = text;
       statusMsg.style.color = '#c5221f';
@@ -459,9 +459,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (apiKeys.length === 0 || !apiKeys[0]) {
       showError(dict.statusNoKey);
-      setTimeout(() => {
-        chrome.tabs.create({ url: chrome.runtime.getURL('options.html') });
-      }, 1000);
       return;
     }
 
@@ -479,9 +476,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (apiKeys.length === 0 || !apiKeys[0]) {
       showError(dict.statusNoKey);
-      setTimeout(() => {
-        chrome.tabs.create({ url: chrome.runtime.getURL('options.html') });
-      }, 1000);
       return;
     }
 
@@ -503,9 +497,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (apiKeys.length === 0 || !apiKeys[0]) {
       showError(dict.statusNoKey);
-      setTimeout(() => {
-        chrome.tabs.create({ url: chrome.runtime.getURL('options.html') });
-      }, 1000);
       return;
     }
 
@@ -525,7 +516,7 @@ document.addEventListener('DOMContentLoaded', () => {
         targetLang: targetLang
       }, (response) => {
         if (chrome.runtime.lastError) {
-          console.log('Popup connection closed. Image translation continuing in background.');
+          renderTextError(chrome.runtime.lastError.message || 'Không thể kết nối với Service Worker ngầm.');
           return;
         }
 
@@ -537,8 +528,10 @@ document.addEventListener('DOMContentLoaded', () => {
               renderTextError(dict.statusNoTextInImage || 'Không tìm thấy văn bản nào trong hình ảnh này.');
             }
           } else {
-            renderTextError(response.error);
+            renderTextError(response.error || 'Dịch thuật thất bại.');
           }
+        } else {
+          renderTextError('Không nhận được phản hồi từ dịch vụ ngầm.');
         }
       });
       return;
@@ -556,24 +549,26 @@ document.addEventListener('DOMContentLoaded', () => {
     textOutput.className = 'loading';
     textOutput.style.color = '';
 
-    chrome.runtime.sendMessage({
-      action: 'translate-text-popup',
-      text: rawText,
-      targetLang: targetLang
-    }, (response) => {
-      if (chrome.runtime.lastError) {
-        console.log('Popup connection closed. Translation continuing in background.');
-        return;
-      }
-
-      if (response) {
-        if (response.success) {
-          renderTextOutput(response.translatedText);
-        } else {
-          renderTextError(response.error);
+      chrome.runtime.sendMessage({
+        action: 'translate-text-popup',
+        text: rawText,
+        targetLang: targetLang
+      }, (response) => {
+        if (chrome.runtime.lastError) {
+          renderTextError(chrome.runtime.lastError.message || 'Không thể kết nối với Service Worker ngầm.');
+          return;
         }
-      }
-    });
+
+        if (response) {
+          if (response.success) {
+            renderTextOutput(response.translatedText);
+          } else {
+            renderTextError(response.error || 'Dịch thuật thất bại.');
+          }
+        } else {
+          renderTextError('Không nhận được phản hồi từ dịch vụ ngầm.');
+        }
+      });
   });
 
   function renderTextOutput(translatedText) {

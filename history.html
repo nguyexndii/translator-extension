@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title id="txtPageTitle">Lịch sử dịch thuật - Screen Translator</title>
+  <title id="txtPageTitle">Quản lý Lịch sử - Screen Translator</title>
   <script src="theme-init.js"></script>
   <link rel="stylesheet" href="history.css">
 </head>
@@ -12,10 +12,32 @@
       <div class="header-left">
         <img src="icons/icon128.png" alt="Logo" class="main-logo">
         <div class="title-group">
-          <h1 id="txtTitle">Lịch sử dịch thuật</h1>
-          <p id="txtSubtitle" class="subtitle">Quản lý các bản dịch đã thực hiện</p>
+          <h1 id="txtTitle">Lịch sử hoạt động</h1>
+          <p id="txtSubtitle" class="subtitle">Quản lý lịch sử dịch thuật và mã QR</p>
         </div>
       </div>
+
+      <!-- Tab Switcher -->
+      <div class="history-tabs">
+        <button id="tabTranslate" class="history-tab-btn active">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="4 7 4 4 20 4 20 7"></polyline>
+            <line x1="9" y1="20" x2="15" y2="20"></line>
+            <line x1="12" y1="4" x2="12" y2="20"></line>
+          </svg>
+          <span id="txtTabTranslate">Lịch sử Dịch</span>
+        </button>
+        <button id="tabQr" class="history-tab-btn">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7"></rect>
+            <rect x="14" y="3" width="7" height="7"></rect>
+            <rect x="14" y="14" width="7" height="7"></rect>
+            <rect x="3" y="14" width="7" height="7"></rect>
+          </svg>
+          <span id="txtTabQr">Lịch sử QR</span>
+        </button>
+      </div>
+
       <div class="header-right">
         <button id="btnBackToSettings" class="btn-secondary" style="margin-left: 10px;">Cài đặt</button>
       </div>
@@ -31,7 +53,7 @@
         <input type="text" id="searchBar" placeholder="Tìm kiếm trong lịch sử...">
       </div>
 
-      <div class="filter-dropdown-container">
+      <div class="filter-dropdown-container" id="filterDropdownContainer">
         <select id="langFilter">
           <option value="all">Tất cả ngôn ngữ</option>
         </select>
@@ -39,7 +61,13 @@
 
       <div class="actions-group">
         <span class="history-count-badge" id="historyCount">0 bản dịch</span>
-        <button id="btnClearAll" class="btn-danger">Xóa tất cả</button>
+        <button id="btnClearAll" class="btn-danger-sm">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          </svg>
+          <span id="txtBtnClearAll">Xóa tất cả</span>
+        </button>
       </div>
     </section>
 
@@ -47,15 +75,31 @@
     <main class="history-main">
       <div id="historyList" class="history-grid"></div>
       
-      <!-- Load More Button -->
-      <div class="pagination-row">
-        <button id="btnLoadMore" class="btn-secondary" style="display: none;">Xem thêm</button>
-      </div>
+      <div id="infiniteScrollSentinel" class="infinite-scroll-sentinel"></div>
     </main>
 
     <footer class="history-footer">
       <p id="txtFooterCopyright" class="copyright">Screen Translator - Lịch sử dịch thuật lưu trữ không giới hạn.</p>
     </footer>
+  </div>
+
+  <!-- Modal Confirmation Overlay -->
+  <div id="clearConfirmModal" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-icon">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#f28b82" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+          <line x1="12" y1="9" x2="12" y2="13"></line>
+          <line x1="12" y1="17" x2="12.01" y2="17"></line>
+        </svg>
+      </div>
+      <h3 id="modalConfirmTitle" class="modal-title">Xác nhận xóa</h3>
+      <p id="modalConfirmText" class="modal-text">Bạn có chắc chắn muốn xóa toàn bộ lịch sử không?</p>
+      <div class="modal-actions">
+        <button id="btnModalCancel" class="btn-secondary-modal">Hủy</button>
+        <button id="btnModalConfirm" class="btn-danger-modal">Xóa tất cả</button>
+      </div>
+    </div>
   </div>
   <script src="history.js"></script>
 </body>

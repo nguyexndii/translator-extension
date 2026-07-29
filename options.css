@@ -785,5 +785,122 @@ kbd {
   animation: smooth-lang-fade 0.22s ease-out forwards;
 }
 
+/* Dedicated Backup & Restore Status Banner */
+.backup-status-banner {
+  margin-top: 14px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.25s ease;
+}
+
+.backup-status-banner.success {
+  background-color: rgba(15, 157, 88, 0.12);
+  border: 1px solid rgba(15, 157, 88, 0.3);
+  color: #34a853;
+}
+
+.backup-status-banner.error {
+  background-color: rgba(242, 139, 130, 0.12);
+  border: 1px solid rgba(242, 139, 130, 0.3);
+  color: #f28b82;
+}
+
+:root.light-mode .backup-status-banner.success {
+  background-color: rgba(15, 157, 88, 0.08);
+  border-color: rgba(15, 157, 88, 0.25);
+  color: #137333;
+}
+
+:root.light-mode .backup-status-banner.error {
+  background-color: rgba(217, 48, 37, 0.08);
+  border-color: rgba(217, 48, 37, 0.25);
+  color: #c5221f;
+}
+
+/* Top-Right Floating Toast Notification for Options Page */
+.top-right-toast {
+  position: fixed !important;
+  top: 24px !important;
+  right: 24px !important;
+  min-width: 300px !important;
+  max-width: 380px !important;
+  background: #1e1e2d !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 10px !important;
+  padding: 14px 18px !important;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45) !important;
+  z-index: 999999 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  transform: translateX(130%) !important;
+  opacity: 0 !important;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  pointer-events: auto !important;
+}
+
+.top-right-toast.show {
+  transform: translateX(0) !important;
+  opacity: 1 !important;
+}
+
+.top-right-toast.success {
+  border-left: 4px solid #34a853 !important;
+}
+
+.top-right-toast.error {
+  border-left: 4px solid #f28b82 !important;
+}
+
+:root.light-mode .top-right-toast {
+  background: #ffffff !important;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.15) !important;
+}
+
+.top-right-toast-icon {
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+}
+
+.top-right-toast.success .top-right-toast-icon {
+  background: rgba(52, 168, 83, 0.12) !important;
+  color: #34a853 !important;
+}
+
+.top-right-toast.error .top-right-toast-icon {
+  background: rgba(242, 139, 130, 0.12) !important;
+  color: #f28b82 !important;
+}
+
+.top-right-toast-content {
+  flex: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 2px !important;
+  text-align: left !important;
+}
+
+.top-right-toast-title {
+  font-size: 13.5px !important;
+  font-weight: 700 !important;
+  color: var(--text-color) !important;
+}
+
+.top-right-toast-msg {
+  font-size: 12px !important;
+  color: var(--text-light) !important;
+  line-height: 1.4 !important;
+}
+
 
 

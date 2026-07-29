@@ -1,41 +1,75 @@
 const LOCALIZATION = {
   vi: {
-    title: 'Lịch sử dịch thuật',
-    subtitle: 'Quản lý các bản dịch đã thực hiện',
-    placeholderSearch: 'Tìm kiếm trong lịch sử...',
+    titleTranslate: 'Lịch sử Dịch thuật',
+    titleQr: 'Lịch sử Quét & Tạo Mã QR',
+    subtitleTranslate: 'Quản lý các bản dịch đã thực hiện',
+    subtitleQr: 'Quản lý các mã QR đã quét hoặc tạo',
+    placeholderSearchTranslate: 'Tìm kiếm trong lịch sử dịch...',
+    placeholderSearchQr: 'Tìm kiếm trong lịch sử QR...',
     optionAllLangs: 'Tất cả ngôn ngữ',
-    badgeCount: 'bản dịch',
+    badgeCountTranslate: 'bản dịch',
+    badgeCountQr: 'mã QR',
     btnBackToSettings: 'Cài đặt',
     btnClearAll: 'Xóa tất cả',
     btnLoadMore: 'Xem thêm',
-    copyright: 'Screen Translator - Lịch sử dịch thuật lưu trữ không giới hạn.',
-    emptyHistory: 'Chưa có lịch sử dịch thuật nào.',
-    confirmClear: 'Bạn có chắc chắn muốn xóa toàn bộ lịch sử không?',
-    copySuccess: 'Đã sao chép bản dịch!',
+    copyright: 'Screen Translator - Lịch sử lưu trữ không giới hạn.',
+    emptyTranslateHistory: 'Chưa có lịch sử dịch thuật nào.',
+    emptyQrHistory: 'Chưa có lịch sử mã QR nào.',
+    confirmClearTranslate: 'Bạn có chắc chắn muốn xóa toàn bộ lịch sử dịch thuật không?',
+    confirmClearQr: 'Bạn có chắc chắn muốn xóa toàn bộ lịch sử mã QR không?',
+    copySuccess: 'Đã sao chép nội dung!',
     copyOriginalSuccess: 'Đã sao chép văn bản gốc!',
     deleteTitle: 'Xóa mục này',
-    copyTitle: 'Sao chép bản dịch',
+    copyTitle: 'Sao chép',
+    btnCopy: 'Sao chép',
+    btnOpenLink: 'Mở liên kết',
+    qrTypeScan: 'Quét mã QR',
+    qrTypeGenerate: 'Tạo mã QR',
+    tabTranslate: 'Lịch sử Dịch',
+    tabQr: 'Lịch sử QR',
     doubleClickCopyOriginal: 'Nhấn đúp chuột để sao chép văn bản gốc',
-    doubleClickCopyTranslation: 'Nhấn đúp chuột để sao chép bản dịch'
+    doubleClickCopyTranslation: 'Nhấn đúp chuột để sao chép bản dịch',
+    modalTitle: 'Xác nhận xóa',
+    modalTextTranslate: 'Bạn có chắc chắn muốn xóa toàn bộ lịch sử dịch thuật không? Thao tác này không thể hoàn tác.',
+    modalTextQr: 'Bạn có chắc chắn muốn xóa toàn bộ lịch sử mã QR không? Thao tác này không thể hoàn tác.',
+    btnModalCancel: 'Hủy',
+    btnModalConfirm: 'Xóa tất cả'
   },
   en: {
-    title: 'Translation History',
-    subtitle: 'Manage your previous translations',
-    placeholderSearch: 'Search in history...',
+    titleTranslate: 'Translation History',
+    titleQr: 'QR Code History',
+    subtitleTranslate: 'Manage your previous translations',
+    subtitleQr: 'Manage scanned or generated QR codes',
+    placeholderSearchTranslate: 'Search translation history...',
+    placeholderSearchQr: 'Search QR code history...',
     optionAllLangs: 'All languages',
-    badgeCount: 'translations',
+    badgeCountTranslate: 'translations',
+    badgeCountQr: 'QR codes',
     btnBackToSettings: 'Settings',
     btnClearAll: 'Clear All',
     btnLoadMore: 'Load More',
-    copyright: 'Screen Translator - Unlimited translation history storage.',
-    emptyHistory: 'No translation history yet.',
-    confirmClear: 'Are you sure you want to clear all history?',
-    copySuccess: 'Translation copied!',
+    copyright: 'Screen Translator - Unlimited history storage.',
+    emptyTranslateHistory: 'No translation history yet.',
+    emptyQrHistory: 'No QR code history yet.',
+    confirmClearTranslate: 'Are you sure you want to clear all translation history?',
+    confirmClearQr: 'Are you sure you want to clear all QR history?',
+    copySuccess: 'Content copied!',
     copyOriginalSuccess: 'Original text copied!',
     deleteTitle: 'Delete this item',
-    copyTitle: 'Copy translation',
+    copyTitle: 'Copy',
+    btnCopy: 'Copy',
+    btnOpenLink: 'Open link',
+    qrTypeScan: 'Scanned QR',
+    qrTypeGenerate: 'Generated QR',
+    tabTranslate: 'Translation',
+    tabQr: 'QR Code',
     doubleClickCopyOriginal: 'Double click to copy original',
-    doubleClickCopyTranslation: 'Double click to copy translation'
+    doubleClickCopyTranslation: 'Double click to copy translation',
+    modalTitle: 'Confirm Delete',
+    modalTextTranslate: 'Are you sure you want to clear all translation history? This action cannot be undone.',
+    modalTextQr: 'Are you sure you want to clear all QR history? This action cannot be undone.',
+    btnModalCancel: 'Cancel',
+    btnModalConfirm: 'Clear All'
   }
 };
 
@@ -79,6 +113,7 @@ function getFullLanguageName(langName, uiLang) {
 }
 
 function removeAccents(str) {
+  if (!str) return '';
   return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
 
@@ -95,28 +130,33 @@ function escapeHtml(str) {
 document.addEventListener('DOMContentLoaded', () => {
   const searchBar = document.getElementById('searchBar');
   const langFilter = document.getElementById('langFilter');
+  const filterDropdownContainer = document.getElementById('filterDropdownContainer');
   const historyCount = document.getElementById('historyCount');
   const btnClearAll = document.getElementById('btnClearAll');
   const historyList = document.getElementById('historyList');
-  const btnLoadMore = document.getElementById('btnLoadMore');
   const btnBackToSettings = document.getElementById('btnBackToSettings');
   const txtPageTitle = document.getElementById('txtPageTitle');
   const txtTitle = document.getElementById('txtTitle');
   const txtSubtitle = document.getElementById('txtSubtitle');
   const txtFooterCopyright = document.getElementById('txtFooterCopyright');
 
-  let currentUiLang = 'en';
-  let historyData = [];
-  let displayedCount = 20;
-  const pageStep = 20;
+  const tabTranslate = document.getElementById('tabTranslate');
+  const tabQr = document.getElementById('tabQr');
 
-  // Initialize theme
+  let currentUiLang = 'en';
+  let activeTab = 'translate'; // 'translate' or 'qr'
+  let translationHistoryData = [];
+  let qrHistoryData = [];
+  let currentFilteredItems = [];
+  let currentlyRenderedIndex = 0;
+  const batchSize = 25;
+  let isInfiniteLoading = false;
+
+  // Initialize theme and language
   chrome.storage.local.get(['theme', 'uiLang'], (result) => {
-    // UI Language
     currentUiLang = result.uiLang || 'en';
     applyLocalization();
 
-    // Theme Toggle
     if (result.theme === 'light') {
       document.documentElement.classList.add('light-mode');
     } else {
@@ -126,43 +166,103 @@ document.addEventListener('DOMContentLoaded', () => {
     loadHistory();
   });
 
-  // Navigate to settings page
-  btnBackToSettings.addEventListener('click', () => {
-    chrome.tabs.create({ url: chrome.runtime.getURL('options.html') });
-  });
+  // Tab switching event listeners
+  if (tabTranslate && tabQr) {
+    tabTranslate.addEventListener('click', () => {
+      if (activeTab === 'translate') return;
+      activeTab = 'translate';
+      tabTranslate.classList.add('active');
+      tabQr.classList.remove('active');
+      if (filterDropdownContainer) filterDropdownContainer.style.display = 'block';
+      searchBar.value = '';
+      applyLocalization();
+      loadHistory();
+    });
 
-  // Apply UI strings based on selected display language
+    tabQr.addEventListener('click', () => {
+      if (activeTab === 'qr') return;
+      activeTab = 'qr';
+      tabQr.classList.add('active');
+      tabTranslate.classList.remove('active');
+      if (filterDropdownContainer) filterDropdownContainer.style.display = 'none';
+      searchBar.value = '';
+      applyLocalization();
+      loadHistory();
+    });
+  }
+
+  // Navigate to settings page
+  if (btnBackToSettings) {
+    btnBackToSettings.addEventListener('click', () => {
+      chrome.tabs.create({ url: chrome.runtime.getURL('options.html') });
+    });
+  }
+
+  // Apply UI strings based on selected display language and active tab
   function applyLocalization() {
     const dict = LOCALIZATION[currentUiLang] || LOCALIZATION.en;
-    txtPageTitle.textContent = `${dict.title} - Screen Translator`;
-    txtTitle.textContent = dict.title;
-    txtSubtitle.textContent = dict.subtitle;
-    searchBar.placeholder = dict.placeholderSearch;
+    
+    if (activeTab === 'translate') {
+      txtPageTitle.textContent = `${dict.titleTranslate} - Screen Translator`;
+      txtTitle.textContent = dict.titleTranslate;
+      txtSubtitle.textContent = dict.subtitleTranslate;
+      searchBar.placeholder = dict.placeholderSearchTranslate;
+    } else {
+      txtPageTitle.textContent = `${dict.titleQr} - Screen Translator`;
+      txtTitle.textContent = dict.titleQr;
+      txtSubtitle.textContent = dict.subtitleQr;
+      searchBar.placeholder = dict.placeholderSearchQr;
+    }
+
     btnBackToSettings.textContent = dict.btnBackToSettings;
-    btnClearAll.textContent = dict.btnClearAll;
-    btnLoadMore.textContent = dict.btnLoadMore;
+    
+    const txtBtnClearAllEl = document.getElementById('txtBtnClearAll');
+    if (txtBtnClearAllEl) txtBtnClearAllEl.textContent = dict.btnClearAll;
+    
     txtFooterCopyright.textContent = dict.copyright;
 
-    // Reset default filter options
-    langFilter.options[0].textContent = dict.optionAllLangs;
+    const txtTabTranslateEl = document.getElementById('txtTabTranslate');
+    const txtTabQrEl = document.getElementById('txtTabQr');
+    if (txtTabTranslateEl) txtTabTranslateEl.textContent = dict.tabTranslate;
+    if (txtTabQrEl) txtTabQrEl.textContent = dict.tabQr;
+
+    const modalConfirmTitle = document.getElementById('modalConfirmTitle');
+    const modalConfirmText = document.getElementById('modalConfirmText');
+    const btnModalCancel = document.getElementById('btnModalCancel');
+    const btnModalConfirm = document.getElementById('btnModalConfirm');
+
+    if (modalConfirmTitle) modalConfirmTitle.textContent = dict.modalTitle;
+    if (modalConfirmText) {
+      modalConfirmText.textContent = activeTab === 'translate' ? dict.modalTextTranslate : dict.modalTextQr;
+    }
+    if (btnModalCancel) btnModalCancel.textContent = dict.btnModalCancel;
+    if (btnModalConfirm) btnModalConfirm.textContent = dict.btnModalConfirm;
+
+    if (langFilter && langFilter.options[0]) {
+      langFilter.options[0].textContent = dict.optionAllLangs;
+    }
   }
 
   // Load history from chrome storage
   function loadHistory() {
-    chrome.storage.local.get(['translationHistory'], (result) => {
-      historyData = result.translationHistory || [];
-      populateFilterOptions();
+    chrome.storage.local.get(['translationHistory', 'qrHistory'], (result) => {
+      translationHistoryData = result.translationHistory || [];
+      qrHistoryData = result.qrHistory || [];
+
+      if (activeTab === 'translate') {
+        populateFilterOptions();
+      }
       renderHistory();
     });
   }
 
-  // Populate target language filter options
+  // Populate target language filter options (for translation tab)
   function populateFilterOptions() {
     const currentFilter = langFilter.value;
     const dict = LOCALIZATION[currentUiLang] || LOCALIZATION.en;
     langFilter.innerHTML = `<option value="all">${dict.optionAllLangs}</option>`;
     
-    const targetLangs = [...new Set(historyData.map(item => item.targetLang).filter(Boolean))];
+    const targetLangs = [...new Set(translationHistoryData.map(item => item.targetLang).filter(Boolean))];
     targetLangs.sort().forEach(lang => {
       const option = document.createElement('option');
       option.value = lang;
@@ -170,7 +270,6 @@ document.addEventListener('DOMContentLoaded', () => {
       langFilter.appendChild(option);
     });
 
-    // Restore previous selection if still available
     if ([...langFilter.options].some(opt => opt.value === currentFilter)) {
       langFilter.value = currentFilter;
     }
@@ -182,29 +281,41 @@ document.addEventListener('DOMContentLoaded', () => {
     const filterLang = langFilter.value;
     const dict = LOCALIZATION[currentUiLang] || LOCALIZATION.en;
 
+    const sourceData = activeTab === 'translate' ? translationHistoryData : qrHistoryData;
+
     // Filter items
-    const filteredItems = historyData.filter(item => {
-      // 1. Language Filter
-      if (filterLang !== 'all' && item.targetLang !== filterLang) {
-        return false;
-      }
-      // 2. Search Query
-      if (searchQuery) {
-        const origClean = removeAccents(item.original);
-        const transClean = removeAccents(item.translated);
-        if (!origClean.includes(searchQuery) && !transClean.includes(searchQuery)) {
+    currentFilteredItems = sourceData.filter(item => {
+      if (activeTab === 'translate') {
+        if (filterLang !== 'all' && item.targetLang !== filterLang) {
           return false;
+        }
+        if (searchQuery) {
+          const origClean = removeAccents(item.original);
+          const transClean = removeAccents(item.translated);
+          if (!origClean.includes(searchQuery) && !transClean.includes(searchQuery)) {
+            return false;
+          }
+        }
+      } else {
+        if (searchQuery) {
+          const contentClean = removeAccents(item.content);
+          if (!contentClean.includes(searchQuery)) {
+            return false;
+          }
         }
       }
       return true;
     });
 
     // Update count badge
-    historyCount.textContent = `${filteredItems.length} ${dict.badgeCount}`;
+    const badgeUnit = activeTab === 'translate' ? dict.badgeCountTranslate : dict.badgeCountQr;
+    historyCount.textContent = `${currentFilteredItems.length} ${badgeUnit}`;
 
     historyList.innerHTML = '';
+    currentlyRenderedIndex = 0;
 
-    if (filteredItems.length === 0) {
+    if (currentFilteredItems.length === 0) {
+      const emptyText = activeTab === 'translate' ? dict.emptyTranslateHistory : dict.emptyQrHistory;
       historyList.innerHTML = `
         <div class="history-empty">
           <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -214,135 +325,239 @@ document.addEventListener('DOMContentLoaded', () => {
             <line x1="9" y1="19" x2="15" y2="19"></line>
             <polyline points="9 11 10 11 11 11"></polyline>
           </svg>
-          <p>${dict.emptyHistory}</p>
+          <p>${emptyText}</p>
         </div>
       `;
-      btnLoadMore.style.display = 'none';
       return;
     }
 
-    // Paginate visible entries to avoid lag
-    const visibleItems = filteredItems.slice(0, displayedCount);
-
-    visibleItems.forEach(item => {
-      const itemEl = document.createElement('div');
-      itemEl.className = 'history-item';
-      
-      const srcFull = getFullLanguageName(item.sourceLang, currentUiLang);
-      const tgtFull = getFullLanguageName(item.targetLang, currentUiLang);
-      const formattedTime = item.timestamp ? new Date(item.timestamp).toLocaleString(currentUiLang === 'vi' ? 'vi-VN' : 'en-US') : '';
-      
-      // Split original and translated text by lines
-      const origLines = (item.original || '').split('\n');
-      const transLines = (item.translated || '').split('\n');
-      const maxLines = Math.max(origLines.length, transLines.length);
-      
-      let origHtml = '';
-      let transHtml = '';
-      
-      for (let i = 0; i < maxLines; i++) {
-        const origText = origLines[i] || '';
-        const transText = transLines[i] || '';
-        
-        origHtml += `<div class="history-line-segment" data-index="${i}">${escapeHtml(origText) || '&nbsp;'}</div>`;
-        transHtml += `<div class="history-line-segment" data-index="${i}">${escapeHtml(transText) || '&nbsp;'}</div>`;
-      }
-
-      itemEl.innerHTML = `
-        <div class="history-item-header">
-          <div class="history-item-meta">
-            <span class="history-item-langs">${srcFull} ➔ ${tgtFull}</span>
-            <span class="history-item-time">${formattedTime}</span>
-          </div>
-          <div class="history-item-actions">
-            <!-- Copy Translated -->
-            <button class="btn-item-action copy-translated-btn" title="${dict.copyTitle}">
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-              </svg>
-            </button>
-            <!-- Delete -->
-            <button class="btn-item-action delete-btn" title="${dict.deleteTitle}">
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="3 6 5 6 21 6"></polyline>
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-              </svg>
-            </button>
-          </div>
-        </div>
-        <div class="history-item-body">
-          <div class="history-original" title="${dict.doubleClickCopyOriginal}">${origHtml}</div>
-          <div class="history-translated" title="${dict.doubleClickCopyTranslation}">${transHtml}</div>
-        </div>
-      `;
-
-      // Copy Action
-      itemEl.querySelector('.copy-translated-btn').addEventListener('click', () => {
-        copyToClipboard(item.translated, dict.copySuccess);
-      });
-
-      // Delete Action
-      itemEl.querySelector('.delete-btn').addEventListener('click', () => {
-        deleteItem(item.id);
-      });
-
-      // Double Click copy listeners
-      itemEl.querySelector('.history-original').addEventListener('dblclick', () => {
-        copyToClipboard(item.original, dict.copyOriginalSuccess);
-      });
-
-      itemEl.querySelector('.history-translated').addEventListener('dblclick', () => {
-        copyToClipboard(item.translated, dict.copySuccess);
-      });
-
-      // Hover Highlight Logic
-      const origDiv = itemEl.querySelector('.history-original');
-      const transDiv = itemEl.querySelector('.history-translated');
-      
-      const setHighlight = (index, highlight) => {
-        if (index === null || index === undefined) return;
-        const origSeg = origDiv.querySelector(`.history-line-segment[data-index="${index}"]`);
-        const transSeg = transDiv.querySelector(`.history-line-segment[data-index="${index}"]`);
-        if (origSeg) {
-          if (highlight) origSeg.classList.add('segment-highlight');
-          else origSeg.classList.remove('segment-highlight');
-        }
-        if (transSeg) {
-          if (highlight) transSeg.classList.add('segment-highlight');
-          else transSeg.classList.remove('segment-highlight');
-        }
-      };
-
-      itemEl.addEventListener('mouseover', (e) => {
-        const segment = e.target.closest('.history-line-segment');
-        if (segment) {
-          const index = segment.getAttribute('data-index');
-          setHighlight(index, true);
-        }
-      });
-      
-      itemEl.addEventListener('mouseout', (e) => {
-        const segment = e.target.closest('.history-line-segment');
-        if (segment) {
-          const index = segment.getAttribute('data-index');
-          setHighlight(index, false);
-        }
-      });
-
-      historyList.appendChild(itemEl);
-    });
-
-    // Show/Hide load more button
-    if (filteredItems.length > displayedCount) {
-      btnLoadMore.style.display = 'block';
-    } else {
-      btnLoadMore.style.display = 'none';
-    }
+    appendNextBatch(false);
   }
 
-  // Copy to clipboard helper
+  function appendNextBatch(isScrollEvent = false) {
+    if (isInfiniteLoading || currentlyRenderedIndex >= currentFilteredItems.length) return;
+    isInfiniteLoading = true;
+
+    const dict = LOCALIZATION[currentUiLang] || LOCALIZATION.en;
+    const batch = currentFilteredItems.slice(currentlyRenderedIndex, currentlyRenderedIndex + batchSize);
+
+    if (activeTab === 'translate') {
+      batch.forEach((item, staggerIndex) => {
+        const itemEl = document.createElement('div');
+        itemEl.className = 'history-item';
+        if (isScrollEvent) {
+          itemEl.classList.add('infinite-item-enter');
+          itemEl.style.animationDelay = `${staggerIndex * 25}ms`;
+        }
+        
+        const srcFull = getFullLanguageName(item.sourceLang, currentUiLang);
+        const tgtFull = getFullLanguageName(item.targetLang, currentUiLang);
+        const formattedTime = item.timestamp ? new Date(item.timestamp).toLocaleString(currentUiLang === 'vi' ? 'vi-VN' : 'en-US') : '';
+        
+        const origLines = (item.original || '').split('\n');
+        const transLines = (item.translated || '').split('\n');
+        const maxLines = Math.max(origLines.length, transLines.length);
+        
+        let origHtml = '';
+        let transHtml = '';
+        
+        for (let i = 0; i < maxLines; i++) {
+          const origText = origLines[i] || '';
+          const transText = transLines[i] || '';
+          
+          origHtml += `<div class="history-line-segment" data-index="${i}">${escapeHtml(origText) || '&nbsp;'}</div>`;
+          transHtml += `<div class="history-line-segment" data-index="${i}">${escapeHtml(transText) || '&nbsp;'}</div>`;
+        }
+
+        itemEl.innerHTML = `
+          <div class="history-item-header">
+            <div class="history-item-meta">
+              <span class="history-item-langs">${srcFull} ➔ ${tgtFull}</span>
+              <span class="history-item-time">${formattedTime}</span>
+            </div>
+            <div class="history-item-actions">
+              <button class="btn-item-action copy-translated-btn" title="${dict.copyTitle}">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+              </button>
+              <button class="btn-item-action delete-btn" title="${dict.deleteTitle}">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div class="history-item-body">
+            <div class="history-original" title="${dict.doubleClickCopyOriginal}">${origHtml}</div>
+            <div class="history-translated" title="${dict.doubleClickCopyTranslation}">${transHtml}</div>
+          </div>
+        `;
+
+        itemEl.querySelector('.copy-translated-btn').addEventListener('click', () => {
+          copyToClipboard(item.translated, dict.copySuccess);
+        });
+
+        itemEl.querySelector('.delete-btn').addEventListener('click', () => {
+          deleteTranslationItem(item.id);
+        });
+
+        itemEl.querySelector('.history-original').addEventListener('dblclick', () => {
+          copyToClipboard(item.original, dict.copyOriginalSuccess);
+        });
+
+        itemEl.querySelector('.history-translated').addEventListener('dblclick', () => {
+          copyToClipboard(item.translated, dict.copySuccess);
+        });
+
+        const origDiv = itemEl.querySelector('.history-original');
+        const transDiv = itemEl.querySelector('.history-translated');
+        
+        const setHighlight = (index, highlight) => {
+          if (index === null || index === undefined) return;
+          const origSeg = origDiv.querySelector(`.history-line-segment[data-index="${index}"]`);
+          const transSeg = transDiv.querySelector(`.history-line-segment[data-index="${index}"]`);
+          if (origSeg) {
+            if (highlight) origSeg.classList.add('segment-highlight');
+            else origSeg.classList.remove('segment-highlight');
+          }
+          if (transSeg) {
+            if (highlight) transSeg.classList.add('segment-highlight');
+            else transSeg.classList.remove('segment-highlight');
+          }
+        };
+
+        itemEl.addEventListener('mouseover', (e) => {
+          const segment = e.target.closest('.history-line-segment');
+          if (segment) {
+            const index = segment.getAttribute('data-index');
+            setHighlight(index, true);
+          }
+        });
+        
+        itemEl.addEventListener('mouseout', (e) => {
+          const segment = e.target.closest('.history-line-segment');
+          if (segment) {
+            const index = segment.getAttribute('data-index');
+            setHighlight(index, false);
+          }
+        });
+
+        historyList.appendChild(itemEl);
+      });
+
+    } else {
+      // QR Code History Card Rendering
+      batch.forEach((item, staggerIndex) => {
+        const itemEl = document.createElement('div');
+        itemEl.className = 'qr-item';
+        if (isScrollEvent) {
+          itemEl.classList.add('infinite-item-enter');
+          itemEl.style.animationDelay = `${staggerIndex * 25}ms`;
+        }
+
+        const isScan = item.type === 'scan';
+        const badgeText = isScan ? dict.qrTypeScan : dict.qrTypeGenerate;
+        const formattedTime = item.timestamp ? new Date(item.timestamp).toLocaleString(currentUiLang === 'vi' ? 'vi-VN' : 'en-US') : '';
+        const isUrl = /^https?:\/\//i.test((item.content || '').trim());
+
+        itemEl.innerHTML = `
+          <div class="qr-item-header">
+            <span class="qr-type-badge ${isScan ? 'scan' : 'generate'}">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                ${isScan 
+                  ? '<path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"></path>' 
+                  : '<rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect>'}
+              </svg>
+              ${badgeText}
+            </span>
+            <span class="qr-item-time">${formattedTime}</span>
+          </div>
+          <div class="qr-item-body">${escapeHtml(item.content)}</div>
+          <div class="qr-item-actions">
+            ${isUrl ? `
+              <button class="btn-qr-action open-url-btn">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                <span>${dict.btnOpenLink}</span>
+              </button>
+            ` : ''}
+            <button class="btn-qr-action copy-qr-btn">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+              <span>${dict.btnCopy}</span>
+            </button>
+            <button class="btn-item-action delete-qr-btn" title="${dict.deleteTitle}">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            </button>
+          </div>
+        `;
+
+        if (isUrl) {
+          itemEl.querySelector('.open-url-btn').addEventListener('click', () => {
+            window.open(item.content, '_blank');
+          });
+        }
+
+        itemEl.querySelector('.copy-qr-btn').addEventListener('click', () => {
+          copyToClipboard(item.content, dict.copySuccess);
+        });
+
+        itemEl.querySelector('.delete-qr-btn').addEventListener('click', () => {
+          deleteQrItem(item.id);
+        });
+
+        historyList.appendChild(itemEl);
+      });
+    }
+
+    currentlyRenderedIndex += batch.length;
+    isInfiniteLoading = false;
+  }
+
+  // Setup IntersectionObserver for smooth 60 FPS Infinite Scroll
+  const sentinel = document.getElementById('infiniteScrollSentinel');
+  if (sentinel && 'IntersectionObserver' in window) {
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          if (currentlyRenderedIndex < currentFilteredItems.length) {
+            appendNextBatch(true);
+          }
+        }
+      });
+    }, {
+      root: null,
+      rootMargin: '350px 0px',
+      threshold: 0
+    });
+    observer.observe(sentinel);
+  }
+
+  // Fallback scroll listener
+  window.addEventListener('scroll', () => {
+    if (currentlyRenderedIndex >= currentFilteredItems.length || isInfiniteLoading) return;
+    const scrollPosition = window.innerHeight + window.scrollY;
+    const threshold = document.documentElement.offsetHeight - 450;
+    if (scrollPosition >= threshold) {
+      appendNextBatch(true);
+    }
+  });
+
+  // Filter input listeners
+  searchBar.addEventListener('input', () => {
+    renderHistory();
+  });
+
+  if (langFilter) {
+    langFilter.addEventListener('change', () => {
+      renderHistory();
+    });
+  }
+
+  // Clipboard Helper
   function copyToClipboard(text, successMsg) {
+    if (!text) return;
     navigator.clipboard.writeText(text).then(() => {
       showToast(successMsg);
     }).catch(err => {
@@ -365,106 +580,59 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 2000);
   }
 
-  // Delete individual item
-  function deleteItem(id) {
-    const updatedHistory = historyData.filter(item => item.id !== id);
+  // Delete individual translation item
+  function deleteTranslationItem(id) {
+    const updatedHistory = translationHistoryData.filter(item => item.id !== id);
     chrome.storage.local.set({ translationHistory: updatedHistory }, () => {
       loadHistory();
     });
   }
 
-  // Clear all history
-  btnClearAll.addEventListener('click', () => {
-    const dict = LOCALIZATION[currentUiLang] || LOCALIZATION.en;
-    if (confirm(dict.confirmClear)) {
-      chrome.storage.local.set({ translationHistory: [] }, () => {
-        loadHistory();
-      });
-    }
-  });
-
-  // Load more pagination click handler
-  btnLoadMore.addEventListener('click', () => {
-    displayedCount += pageStep;
-    renderHistory();
-  });
-
-  // Filters listeners
-  searchBar.addEventListener('input', () => {
-    displayedCount = pageStep; // Reset display limit
-    renderHistory();
-  });
-
-  langFilter.addEventListener('change', () => {
-    displayedCount = pageStep; // Reset display limit
-    renderHistory();
-  });
-
-  // Listen for background changes (live sync)
-  chrome.storage.onChanged.addListener((changes, namespace) => {
-    if (namespace === 'local') {
-      if (changes.translationHistory) {
-        historyData = changes.translationHistory.newValue || [];
-        populateFilterOptions();
-        renderHistory();
-      }
-      if (changes.theme) {
-        if (changes.theme.newValue === 'light') {
-          document.documentElement.classList.add('light-mode');
-        } else {
-          document.documentElement.classList.remove('light-mode');
-        }
-        localStorage.setItem('theme', changes.theme.newValue || 'dark');
-      }
-      if (changes.uiLang) {
-        currentUiLang = changes.uiLang.newValue || 'en';
-        applyLocalization();
-        populateFilterOptions();
-        renderHistory();
-      }
-    }
-  });
-
-  // Global selection change listener for aligned highlights
-  document.addEventListener('selectionchange', () => {
-    const selection = window.getSelection();
-    
-    // Clear all segment-selected classes first
-    document.querySelectorAll('.history-line-segment.segment-selected').forEach(seg => {
-      seg.classList.remove('segment-selected');
+  // Delete individual QR item
+  function deleteQrItem(id) {
+    const updatedHistory = qrHistoryData.filter(item => item.id !== id);
+    chrome.storage.local.set({ qrHistory: updatedHistory }, () => {
+      loadHistory();
     });
+  }
 
-    if (!selection || selection.isCollapsed) return;
+  // Clear all modal handlers
+  const clearConfirmModal = document.getElementById('clearConfirmModal');
+  const btnModalCancel = document.getElementById('btnModalCancel');
+  const btnModalConfirm = document.getElementById('btnModalConfirm');
 
-    // Find parent history-item container
-    let anchorNode = selection.anchorNode;
-    let itemEl = null;
-    while (anchorNode) {
-      if (anchorNode.classList && anchorNode.classList.contains('history-item')) {
-        itemEl = anchorNode;
-        break;
+  if (btnClearAll) {
+    btnClearAll.addEventListener('click', () => {
+      if (clearConfirmModal) clearConfirmModal.style.display = 'flex';
+    });
+  }
+
+  if (btnModalCancel) {
+    btnModalCancel.addEventListener('click', () => {
+      if (clearConfirmModal) clearConfirmModal.style.display = 'none';
+    });
+  }
+
+  if (btnModalConfirm) {
+    btnModalConfirm.addEventListener('click', () => {
+      if (clearConfirmModal) clearConfirmModal.style.display = 'none';
+      if (activeTab === 'translate') {
+        chrome.storage.local.set({ translationHistory: [] }, () => {
+          loadHistory();
+        });
+      } else {
+        chrome.storage.local.set({ qrHistory: [] }, () => {
+          loadHistory();
+        });
       }
-      anchorNode = anchorNode.parentNode;
-    }
+    });
+  }
 
-    if (!itemEl) return;
-
-    try {
-      const origDiv = itemEl.querySelector('.history-original');
-      const transDiv = itemEl.querySelector('.history-translated');
-      const segments = itemEl.querySelectorAll('.history-line-segment');
-      
-      segments.forEach(seg => {
-        if (selection.intersectsNode(seg)) {
-          const index = seg.getAttribute('data-index');
-          const origSeg = origDiv.querySelector(`.history-line-segment[data-index="${index}"]`);
-          const transSeg = transDiv.querySelector(`.history-line-segment[data-index="${index}"]`);
-          if (origSeg) origSeg.classList.add('segment-selected');
-          if (transSeg) transSeg.classList.add('segment-selected');
-        }
-      });
-    } catch (err) {
-      console.error('Error resolving selected segments:', err);
-    }
-  });
+  if (clearConfirmModal) {
+    clearConfirmModal.addEventListener('click', (e) => {
+      if (e.target === clearConfirmModal) {
+        clearConfirmModal.style.display = 'none';
+      }
+    });
+  }
 });

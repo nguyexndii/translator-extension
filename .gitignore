@@ -29,6 +29,7 @@ pnpm-debug.log*
 *.key
 config.local.json
 
-# Chrome extension specific
+# Test & Backup Files
+test_*_backup.json
 *.crx
 *.zip

@@ -3,6 +3,16 @@
   if (window.gstInitialized) return;
   window.gstInitialized = true;
 
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
   let selectionOverlay = null;
   let helperBar = null;
   let loadingOverlay = null;
@@ -188,6 +198,9 @@
 
         isTranslating = true; // Set immediately to prevent double-trigger from shortcut keys
 
+        // Show loading spinner INSTANTLY
+        showLoading(dict.loadingText || 'Đang dịch...');
+
         // Hide floating icon and clear selection immediately to avoid duplication or leftovers
         hideFloatingTranslateIcon();
         selection.removeAllRanges();
@@ -368,6 +381,11 @@
       // Only proceed if selection is large enough (e.g., width & height > 10px)
       if (w > 10 && h > 10) {
         isTranslating = true; // Keep block active for API request
+        const dict = CONTENT_LOCALIZATION[currentUiLang] || CONTENT_LOCALIZATION.vi;
+        
+        // Show loading spinner INSTANTLY upon releasing mouse
+        showLoading(dict.loadingText || 'Đang dịch...');
+
         const context = {
           pageTitle: document.title,
           pageUrl: window.location.href,
@@ -403,15 +421,26 @@
     isTranslating = false; // Reset block when selection is cancelled
   }
 
-  // Helper function to crop screenshot using client-side Image & Canvas
+  // Helper function to crop screenshot using client-side Image & Canvas with ultra-fast downscaling
   function cropImage(base64Data, rect, dpr) {
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.onload = () => {
         try {
+          // Max dimension 650px for ultra-fast Gemini Vision processing (lightweight ~30KB payload)
+          const maxDim = 650;
+          let targetW = rect.w;
+          let targetH = rect.h;
+          
+          if (targetW > maxDim || targetH > maxDim) {
+            const scale = Math.min(maxDim / targetW, maxDim / targetH);
+            targetW = Math.round(targetW * scale);
+            targetH = Math.round(targetH * scale);
+          }
+
           const canvas = document.createElement('canvas');
-          canvas.width = rect.w;
-          canvas.height = rect.h;
+          canvas.width = targetW;
+          canvas.height = targetH;
           const ctx = canvas.getContext('2d');
           
           // Draw the cropped portion from the full screen image
@@ -423,12 +452,12 @@
             rect.h * dpr,
             0,
             0,
-            rect.w,
-            rect.h
+            targetW,
+            targetH
           );
           
-          // Convert canvas to jpeg base64 with 80% compression quality
-          const croppedBase64 = canvas.toDataURL('image/jpeg', 0.8);
+          // Convert canvas to jpeg base64 with 65% compression quality for ultra-fast payload
+          const croppedBase64 = canvas.toDataURL('image/jpeg', 0.65);
           resolve(croppedBase64);
         } catch (err) {
           reject(err);
@@ -608,39 +637,27 @@
       block.style.left = boxLeft + 'px';
       block.style.top = boxTop + 'px';
       
-      // Auto width and dynamic max width to prevent text clipping
-      block.style.width = 'auto';
+      // Auto width and compact fit around text content
+      block.style.width = 'fit-content';
+      block.style.minWidth = 'auto';
+      block.style.maxWidth = Math.min(window.innerWidth - 60, Math.max(rect.w + 60, 320)) + 'px';
+      block.style.height = 'auto';
+      block.style.minHeight = 'auto';
 
-      // Detect if the original block is vertical text (height is significantly larger than width)
-      const isVerticalText = origHeight > origWidth * 1.5;
-
-      if (isVerticalText) {
-        // For vertical text, since translated text is horizontal (Vietnamese/English),
-        // we expand the box width and let the height adjust automatically to fit the content nicely.
-        block.style.minWidth = Math.max(150, origWidth * 2.5) + 'px';
-        block.style.maxWidth = '320px';
-        block.style.minHeight = 'auto'; // Don't force massive height of vertical column
-        block.style.height = 'auto';
-        
-        // Center the horizontal box relative to the original vertical column
-        block.style.left = (boxLeft + boxWidth / 2) + 'px';
-        block.style.transform = 'translateX(-50%)';
+      // Keep single-line translations on 1 continuous line without forced wrapping
+      const textVal = item.translated_text || '';
+      if (isText || !textVal.includes('\n')) {
+        block.style.whiteSpace = 'nowrap';
       } else {
-        block.style.minWidth = boxWidth + 'px';
-        block.style.maxWidth = Math.max(boxWidth * 1.5, 280) + 'px';
-        block.style.minHeight = boxHeight + 'px';
-        block.style.height = 'auto';
+        block.style.whiteSpace = 'pre-wrap';
       }
 
-      // Calculate font size dynamically relative to text height (or width if vertical text)
-      // Cap at 13px/14px to keep text compact and aligned precisely
-      let fontSize;
-      if (isVerticalText) {
-        fontSize = Math.max(12, Math.min(origWidth * 0.85, 15));
-      } else if (isText) {
-        fontSize = Math.max(10, Math.min(origHeight * 0.75, 13));
-      } else {
-        fontSize = Math.max(10, Math.min(origHeight * 0.68, 13));
+      // Calculate font size dynamically relative to text height
+      let fontSize = 13;
+      if (isText) {
+        fontSize = 13;
+      } else if (origHeight > 0) {
+        fontSize = Math.max(11, Math.min(origHeight * 0.7, 14));
       }
       block.style.fontSize = fontSize + 'px';
 
@@ -740,9 +757,17 @@
     const header = document.createElement('div');
     header.className = 'gst-toast-header';
 
-    const title = document.createElement('span');
-    title.textContent = dict.errorTitle;
-    header.appendChild(title);
+    const titleWrap = document.createElement('div');
+    titleWrap.className = 'gst-toast-title-wrap';
+    titleWrap.innerHTML = `
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ff5252" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="12" y1="8" x2="12" y2="12"></line>
+        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+      </svg>
+      <span>${escapeHtml(dict.errorTitle || 'Lỗi Dịch Thuật')}</span>
+    `;
+    header.appendChild(titleWrap);
 
     const closeBtn = document.createElement('span');
     closeBtn.className = 'gst-toast-close';
@@ -760,18 +785,19 @@
                          errorMsg.toLowerCase().includes('cấu hình api key') ||
                          errorMsg.toLowerCase().includes('vui lòng cấu hình api key');
                          
+    const msgPara = document.createElement('p');
+    msgPara.className = 'gst-toast-message';
+
     if (isMissingKey) {
-      body.textContent = errorMsg + ' ';
+      msgPara.textContent = currentUiLang === 'vi' 
+        ? 'Chưa cấu hình API Key. Vui lòng thêm khóa API trong trang Cài đặt để tiếp tục dịch.' 
+        : 'API Key not configured. Please add an API Key in Settings to continue.';
+      body.appendChild(msgPara);
       
       const link = document.createElement('a');
       link.href = '#';
-      link.className = 'gst-toast-link';
-      link.textContent = currentUiLang === 'vi' ? 'Đi đến Cài đặt' : 'Go to Settings';
-      link.style.color = '#a8b8ff';
-      link.style.textDecoration = 'underline';
-      link.style.fontWeight = 'bold';
-      link.style.marginLeft = '8px';
-      link.style.cursor = 'pointer';
+      link.className = 'gst-toast-action-btn';
+      link.innerHTML = `<span>${currentUiLang === 'vi' ? 'Đi đến Cài đặt' : 'Go to Settings'}</span> <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>`;
       
       link.addEventListener('click', (e) => {
         e.preventDefault();
@@ -779,19 +805,21 @@
       });
       body.appendChild(link);
     } else {
-      body.textContent = errorMsg;
+      msgPara.textContent = errorMsg;
+      body.appendChild(msgPara);
     }
     toast.appendChild(body);
 
     getActiveContainer().appendChild(toast);
 
-    // Auto-remove after 8 seconds
-    setTimeout(() => {
+    // Auto-remove after 3.5 seconds
+    if (window.gstErrorToastTimeout) clearTimeout(window.gstErrorToastTimeout);
+    window.gstErrorToastTimeout = setTimeout(() => {
       if (toast.parentElement) {
         toast.style.opacity = '0';
         setTimeout(() => toast.remove(), 300);
       }
-    }, 8000);
+    }, 3500);
   }
 
   function hideLoading() {
@@ -815,21 +843,26 @@
 
   let floatingIcon = null;
 
-  function showFloatingTranslateIcon(x, y, text) {
+  function showFloatingTranslateIcon(rect, text) {
     if (floatingIcon) floatingIcon.remove();
 
     floatingIcon = document.createElement('div');
     floatingIcon.className = 'gst-floating-icon';
 
-    // Capture scroll position NOW (at the moment icon is shown)
-    const capturedScrollX = window.scrollX;
-    const capturedScrollY = window.scrollY;
+    const iconWidth = 32;
+    const iconHeight = 32;
 
-    // Position it near the mouse selection release coords (document-absolute)
-    const left = x + 10;
-    const top = y + 10;
-    floatingIcon.style.left = (capturedScrollX + left) + 'px';
-    floatingIcon.style.top = (capturedScrollY + top) + 'px';
+    // Viewport-relative positioning (fixed), centered above text selection
+    let left = rect.left + (rect.width / 2) - (iconWidth / 2);
+    let top = rect.top - iconHeight - 6;
+
+    if (top < 10) top = rect.bottom + 6;
+    if (left + iconWidth > window.innerWidth - 10) left = window.innerWidth - iconWidth - 10;
+    if (left < 10) left = 10;
+
+    floatingIcon.style.position = 'fixed';
+    floatingIcon.style.left = left + 'px';
+    floatingIcon.style.top = top + 'px';
 
     // Premium translate SVG icon
     floatingIcon.innerHTML = `
@@ -837,6 +870,7 @@
         <path d="M5 8l6 6M4 14l6-6M2 5h12M7 2h4M22 22l-5-10-5 10M14 18h6"/>
       </svg>
     `;
+    floatingIcon.title = currentUiLang === 'vi' ? 'Dịch đoạn văn đã chọn' : 'Translate selected text';
 
     // Prevent clearing browser selection on mousedown
     floatingIcon.addEventListener('mousedown', (e) => {
@@ -853,15 +887,16 @@
       e.preventDefault();
       e.stopPropagation();
       if (isTranslating) return;
-      
+
+      const dict = CONTENT_LOCALIZATION[currentUiLang] || CONTENT_LOCALIZATION.vi;
       const selection = window.getSelection();
       if (!selection || selection.rangeCount === 0 || !text) {
         hideFloatingTranslateIcon();
         return;
       }
 
-      const range = selection.getRangeAt(0);
-      const rect = range.getBoundingClientRect();
+      const curRange = selection.getRangeAt(0);
+      const curRect = curRange.getBoundingClientRect();
       
       const context = {
         pageTitle: document.title,
@@ -869,7 +904,13 @@
         domain: window.location.hostname
       };
 
-      isTranslating = true; // Block key combinations and other triggers immediately
+      const capturedScrollX = window.scrollX;
+      const capturedScrollY = window.scrollY;
+
+      isTranslating = true;
+
+      // Show loading overlay INSTANTLY
+      showLoading(dict.loadingText || 'Đang dịch...');
 
       // Hide floating icon and clear selection immediately to avoid duplication or leftovers
       hideFloatingTranslateIcon();
@@ -880,10 +921,10 @@
         action: 'process-text-selection',
         text: text,
         rect: {
-          x: rect.left,
-          y: rect.top,
-          w: rect.width,
-          h: rect.height
+          x: curRect.left,
+          y: curRect.top,
+          w: curRect.width,
+          h: curRect.height
         },
         pageScrollX: capturedScrollX,
         pageScrollY: capturedScrollY,
@@ -891,7 +932,7 @@
       });
     });
 
-    document.body.appendChild(floatingIcon);
+    getActiveContainer().appendChild(floatingIcon);
   }
 
   function hideFloatingTranslateIcon() {
@@ -901,34 +942,57 @@
     }
   }
 
-  // Detect mouseup for text selection (ignoring inputs)
-  document.addEventListener('mouseup', (e) => {
+  let selectionTimeout = null;
+
+  function handleSelectionCheck(e) {
     if (!isContextValid()) return;
     
     // Ignore mouseup if we are in crop selection mode
     if (selectionOverlay) return;
 
     // Don't trigger if clicked on editable fields
-    if (e.target) {
-      const tagName = e.target.tagName.toLowerCase();
+    if (e && e.target) {
+      const tagName = e.target.tagName ? e.target.tagName.toLowerCase() : '';
       if (tagName === 'input' || tagName === 'textarea' || e.target.isContentEditable) {
         hideFloatingTranslateIcon();
         return;
       }
     }
 
-    // Wrap in small timeout so browser finished updating selection
-    setTimeout(() => {
+    clearTimeout(selectionTimeout);
+    selectionTimeout = setTimeout(() => {
       const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0) {
+        hideFloatingTranslateIcon();
+        return;
+      }
+
       const selectedText = selection.toString().trim();
-      
       if (selectedText.length > 0) {
-        showFloatingTranslateIcon(e.clientX, e.clientY, selectedText);
+        const range = selection.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        if (rect.width > 0 || rect.height > 0) {
+          showFloatingTranslateIcon(rect, selectedText);
+        }
       } else {
-        // If clicked elsewhere, selection will clear and we hide
         hideFloatingTranslateIcon();
       }
-    }, 10);
+    }, 40);
+  }
+
+  // Detect text selection on mouse release or arrow key selection
+  document.addEventListener('mouseup', handleSelectionCheck);
+  document.addEventListener('keyup', (e) => {
+    if (e.key === 'Shift' || e.key.startsWith('Arrow')) {
+      handleSelectionCheck(e);
+    }
+  });
+
+  document.addEventListener('selectionchange', () => {
+    const selection = window.getSelection();
+    if (!selection || selection.toString().trim().length === 0) {
+      hideFloatingTranslateIcon();
+    }
   });
 
   // Clean up floating icon on click down elsewhere

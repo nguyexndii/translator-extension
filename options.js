@@ -93,6 +93,7 @@ const OPTIONS_LOCALIZATION = {
     lblBtnImportBackup: 'Nhập tệp khôi phục (.json)',
     statusExportSuccess: 'Đã xuất tệp sao lưu lịch sử thành công!',
     statusImportSuccess: 'Đã khôi phục lịch sử thành công!',
+    statusImportError: 'Tệp sao lưu không hợp lệ hoặc bị lỗi!',
     footerCopyright: 'Phát triển cho mục đích dịch trực tiếp màn hình.',
     guideHtml: `
       <div class="guide-item">
@@ -152,6 +153,7 @@ const OPTIONS_LOCALIZATION = {
     lblBtnImportBackup: 'Import Backup (.json)',
     statusExportSuccess: 'History backup exported successfully!',
     statusImportSuccess: 'History restored successfully!',
+    statusImportError: 'Invalid or corrupted backup file!',
     footerCopyright: 'Developed for screen translation.',
     guideHtml: `
       <div class="guide-item">
@@ -492,6 +494,40 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnImportBackup = document.getElementById('btnImportBackup');
     const importFileInput = document.getElementById('importFileInput');
 
+    function showTopRightToast(title, message, isError = false) {
+      let toast = document.getElementById('topRightToast');
+      if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'topRightToast';
+        toast.className = 'top-right-toast';
+        document.body.appendChild(toast);
+      }
+
+      const iconSvg = isError
+        ? '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>'
+        : '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+
+      toast.className = `top-right-toast ${isError ? 'error' : 'success'}`;
+      toast.innerHTML = `
+        <div class="top-right-toast-icon">${iconSvg}</div>
+        <div class="top-right-toast-content">
+          <div class="top-right-toast-title"></div>
+          <div class="top-right-toast-msg"></div>
+        </div>
+      `;
+
+      toast.querySelector('.top-right-toast-title').textContent = title;
+      toast.querySelector('.top-right-toast-msg').textContent = message;
+
+      void toast.offsetWidth;
+      toast.classList.add('show');
+
+      if (window.topRightToastTimeout) clearTimeout(window.topRightToastTimeout);
+      window.topRightToastTimeout = setTimeout(() => {
+        toast.classList.remove('show');
+      }, 4000);
+    }
+
     if (btnExportBackup) {
       btnExportBackup.addEventListener('click', () => {
         chrome.storage.local.get(['translationHistory', 'qrHistory', 'targetLang', 'uiLang', 'theme'], (allData) => {
@@ -522,7 +558,8 @@ document.addEventListener('DOMContentLoaded', () => {
           document.body.removeChild(a);
           URL.revokeObjectURL(url);
 
-          showSaveStatus(dict.statusExportSuccess);
+          const title = currentUiLang === 'vi' ? 'Sao lưu dữ liệu' : 'Data Backup';
+          showTopRightToast(title, dict.statusExportSuccess, false);
         });
       });
     }
@@ -627,16 +664,21 @@ document.addEventListener('DOMContentLoaded', () => {
               }
 
               chrome.storage.local.set(keysToSave, () => {
-                showSaveStatus(dict.statusImportSuccess);
-                setTimeout(() => {
-                  window.location.reload();
-                }, 600);
+                const totalCount = (importedTranslationHistory ? importedTranslationHistory.length : 0) + (importedQrHistory ? importedQrHistory.length : 0);
+                const title = currentUiLang === 'vi' ? 'Khôi phục dữ liệu' : 'Data Restore';
+                const successMsg = currentUiLang === 'vi' 
+                  ? `Đã khôi phục thành công ${totalCount} mục lịch sử!` 
+                  : `Successfully restored ${totalCount} history items!`;
+
+                showTopRightToast(title, successMsg, false);
               });
             });
 
           } catch (err) {
             console.warn('Backup import error:', err);
-            showSaveStatus(dict.statusImportError || 'Tệp sao lưu không hợp lệ!', true);
+            const title = currentUiLang === 'vi' ? 'Lỗi khôi phục' : 'Restore Error';
+            const errorMsg = dict.statusImportError || (currentUiLang === 'vi' ? 'Tệp sao lưu không hợp lệ hoặc bị lỗi!' : 'Invalid or corrupted backup file!');
+            showTopRightToast(title, errorMsg, true);
           }
         };
 
