@@ -194,6 +194,15 @@ document.addEventListener('DOMContentLoaded', () => {
     currentUiLang = lang;
     const dict = LOCALIZATION[lang] || LOCALIZATION.vi;
 
+    // Fast, crisp & smooth transition on container
+    const container = document.querySelector('.container') || document.body;
+    container.classList.remove('lang-refresh-anim');
+    void container.offsetWidth; // Force reflow
+    container.classList.add('lang-refresh-anim');
+    setTimeout(() => {
+      container.classList.remove('lang-refresh-anim');
+    }, 250);
+
     // Header & Tabs
     document.querySelector('header h1').textContent = dict.appName;
     btnOptions.title = dict.btnOptions;
@@ -886,18 +895,47 @@ document.addEventListener('DOMContentLoaded', () => {
   function initSearchableDropdown(inputEl, listEl, getItemsFn, onChange) {
     let selectedValue = 'Vietnamese';
     let activeLabel = 'Tiếng Việt';
+    let highlightedIndex = -1;
+    let currentFiltered = [];
+
+    function updateHighlight() {
+      const items = listEl.querySelectorAll('.dropdown-item');
+      items.forEach((item, idx) => {
+        if (idx === highlightedIndex) {
+          item.classList.add('active');
+          item.scrollIntoView({ block: 'nearest' });
+        } else {
+          item.classList.remove('active');
+        }
+      });
+    }
+
+    function selectItem(idx) {
+      if (idx < 0 || idx >= currentFiltered.length) return;
+      const item = currentFiltered[idx];
+      selectedValue = item.value;
+      activeLabel = item.label;
+      inputEl.value = activeLabel;
+      listEl.style.display = 'none';
+      highlightedIndex = -1;
+      inputEl.blur();
+      onChange(selectedValue);
+    }
 
     function renderList(filterText = '') {
       listEl.innerHTML = '';
       const itemsList = getItemsFn();
-      const filtered = itemsList.filter(lang => {
-        const labelClean = removeAccents(lang.label);
-        const valClean = removeAccents(lang.value);
-        const filterClean = removeAccents(filterText.trim());
-        return labelClean.includes(filterClean) || valClean.includes(filterClean);
+      const filterClean = removeAccents(filterText.trim());
+
+      currentFiltered = itemsList.filter(lang => {
+        const labelClean = removeAccents(lang.label || '');
+        const valClean = removeAccents(lang.value || '');
+        const codeClean = removeAccents(lang.code || '');
+        return labelClean.includes(filterClean) || valClean.includes(filterClean) || (codeClean && codeClean.includes(filterClean));
       });
 
-      if (filtered.length === 0) {
+      if (currentFiltered.length === 0) {
+        highlightedIndex = -1;
         const emptyDiv = document.createElement('div');
         emptyDiv.className = 'dropdown-item';
         emptyDiv.style.color = '#9aa0a6';
@@ -907,31 +945,97 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      filtered.forEach(lang => {
+      if (highlightedIndex < 0 || highlightedIndex >= currentFiltered.length) {
+        highlightedIndex = 0;
+      }
+
+      currentFiltered.forEach((lang, idx) => {
         const item = document.createElement('div');
         item.className = 'dropdown-item';
+        if (idx === highlightedIndex) {
+          item.classList.add('active');
+        }
         item.textContent = lang.label;
         item.setAttribute('data-value', lang.value);
+
+        item.addEventListener('mouseenter', () => {
+          highlightedIndex = idx;
+          updateHighlight();
+        });
+
         item.addEventListener('click', (e) => {
-          selectedValue = lang.value;
-          activeLabel = lang.label;
-          inputEl.value = activeLabel;
-          listEl.style.display = 'none';
-          onChange(selectedValue);
+          selectItem(idx);
           e.stopPropagation();
         });
+
         listEl.appendChild(item);
       });
+
+      updateHighlight();
     }
 
     inputEl.addEventListener('focus', () => {
       inputEl.value = '';
+      highlightedIndex = 0;
       renderList('');
       listEl.style.display = 'block';
     });
 
     inputEl.addEventListener('input', () => {
+      highlightedIndex = 0;
       renderList(inputEl.value);
+      listEl.style.display = 'block';
+    });
+
+    inputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (listEl.style.display === 'none') {
+          listEl.style.display = 'block';
+          renderList(inputEl.value);
+          return;
+        }
+        if (currentFiltered.length === 0) return;
+        if (highlightedIndex < 0) {
+          highlightedIndex = 0;
+        } else if (highlightedIndex >= currentFiltered.length - 1) {
+          highlightedIndex = 0; // Wrap around to top
+        } else {
+          highlightedIndex++;
+        }
+        updateHighlight();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (listEl.style.display === 'none') {
+          listEl.style.display = 'block';
+          renderList(inputEl.value);
+          return;
+        }
+        if (currentFiltered.length === 0) return;
+        if (highlightedIndex <= 0) {
+          highlightedIndex = currentFiltered.length - 1; // Wrap around to bottom
+        } else {
+          highlightedIndex--;
+        }
+        updateHighlight();
+      } else if (e.key === 'Enter') {
+        if (listEl.style.display === 'block') {
+          e.preventDefault();
+          e.stopPropagation();
+          if (highlightedIndex >= 0 && highlightedIndex < currentFiltered.length) {
+            selectItem(highlightedIndex);
+          } else if (currentFiltered.length > 0) {
+            selectItem(0);
+          }
+        }
+      } else if (e.key === 'Escape') {
+        if (listEl.style.display === 'block') {
+          e.preventDefault();
+          listEl.style.display = 'none';
+          inputEl.value = activeLabel;
+          inputEl.blur();
+        }
+      }
     });
 
     document.addEventListener('click', (e) => {

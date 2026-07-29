@@ -61,8 +61,8 @@
         <div class="form-group" style="margin-top: 15px;">
           <label id="lblTheme">Chế độ giao diện (Theme):</label>
           <select id="selTheme" class="theme-select-input">
-            <option value="dark">Tối (Dark)</option>
-            <option value="light">Sáng (Light)</option>
+            <option value="dark" id="optThemeDark">Tối</option>
+            <option value="light" id="optThemeLight">Sáng</option>
           </select>
         </div>
       </section>
@@ -97,11 +97,38 @@
         </div>
         <div class="shortcut-box" style="margin-top: 10px;">
           <div class="shortcut-info">
-            <span id="lblShortcutHistory" class="shortcut-label">Mở trang Lịch sử dịch thuật:</span>
-            <div id="shortcutHistoryValue"><kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>H</kbd></div>
+            <span id="lblShortcutQr" class="shortcut-label">Chụp quét mã QR trên màn hình:</span>
+            <div id="shortcutQrValue"><kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>K</kbd></div>
           </div>
         </div>
       </div>
+      </section>
+
+      <!-- Section 4: Backup & Restore -->
+      <section class="config-section">
+        <h2 id="secBackup">Sao lưu & Khôi phục dữ liệu</h2>
+        <p id="descBackup" class="section-desc">Xuất tệp sao lưu dữ liệu lịch sử dịch và lịch sử mã QR để cất giữ hoặc chuyển sang máy tính khác.</p>
+        
+        <div class="backup-actions-row">
+          <button type="button" id="btnExportBackup" class="btn-secondary">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; display: inline-block; vertical-align: middle;">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <span id="lblBtnExportBackup">Xuất tệp sao lưu (.json)</span>
+          </button>
+
+          <button type="button" id="btnImportBackup" class="btn-secondary-outline">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; display: inline-block; vertical-align: middle;">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="17 8 12 3 7 8"></polyline>
+              <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+            <span id="lblBtnImportBackup">Nhập tệp khôi phục (.json)</span>
+          </button>
+          <input type="file" id="importFileInput" accept=".json" style="display: none;">
+        </div>
       </section>
 
       <!-- Section 4: Hướng dẫn sử dụng (User Guide) -->
@@ -123,7 +150,6 @@
     </main>
 
     <footer class="options-footer">
-      <p id="txtFooterModel">Sử dụng model: gemini-3.1-flash-lite-preview (Tốc độ tối ưu, hỗ trợ đa phương thức)</p>
       <p id="txtFooterCopyright" class="copyright">Phát triển cho mục đích dịch trực tiếp màn hình.</p>
     </footer>
   </div>

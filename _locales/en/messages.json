@@ -16,5 +16,8 @@
   },
   "descOpenHistory": {
     "message": "Open the translation history page"
+  },
+  "descTriggerQrTranslation": {
+    "message": "Capture and scan QR on screen"
   }
 }

@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trang Kiểm Thử Quét Nhiều Mã QR - Screen Translator</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: linear-gradient(135deg, #121214 0%, #1e1e24 100%);
+      color: #ffffff;
+      margin: 0;
+      padding: 40px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      box-sizing: border-box;
+    }
+    
+    .container {
+      max-width: 800px;
+      width: 100%;
+      text-align: center;
+    }
+    
+    h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: #8ab4f8;
+      margin-bottom: 10px;
+      letter-spacing: -0.5px;
+    }
+    
+    p.subtitle {
+      color: #9aa0a6;
+      font-size: 16px;
+      margin-bottom: 40px;
+    }
+    
+    .qr-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 30px;
+      width: 100%;
+      margin-bottom: 40px;
+    }
+    
+    .qr-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+    
+    .qr-card:hover {
+      transform: translateY(-5px);
+      border-color: #8ab4f8;
+      background: rgba(255, 255, 255, 0.05);
+    }
+    
+    .qr-image-wrapper {
+      background: #ffffff;
+      padding: 10px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+    }
+    
+    .qr-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #e8eaed;
+      margin-top: 15px;
+      margin-bottom: 5px;
+    }
+    
+    .qr-desc {
+      font-size: 11.5px;
+      color: #9aa0a6;
+      line-height: 1.4;
+    }
+    
+    .footer {
+      font-size: 13px;
+      color: #5f6368;
+      margin-top: 60px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      padding-top: 20px;
+      width: 100%;
+    }
+  </style>
+  <script src="qrcode.js"></script>
+</head>
+<body>
+  <div class="container">
+    <h1>Trang Kiểm Thử Quét Nhiều Mã QR</h1>
+    <p class="subtitle">Hãy mở extension và click <strong>"Quét QR trên màn hình"</strong> để quét tất cả mã dưới đây cùng lúc!</p>
+    
+    <div class="qr-grid">
+      <!-- QR Card 1 -->
+      <div class="qr-card">
+        <div class="qr-image-wrapper" id="qr1"></div>
+        <div class="qr-title">Mã số 1 (Link Google)</div>
+        <div class="qr-desc">Dẫn tới trang tìm kiếm Google</div>
+      </div>
+      
+      <!-- QR Card 2 -->
+      <div class="qr-card">
+        <div class="qr-image-wrapper" id="qr2"></div>
+        <div class="qr-title">Mã số 2 (Link Wikipedia)</div>
+        <div class="qr-desc">Dẫn tới bách khoa toàn thư mở</div>
+      </div>
+      
+      <!-- QR Card 3 -->
+      <div class="qr-card">
+        <div class="qr-image-wrapper" id="qr3"></div>
+        <div class="qr-title">Mã số 3 (Link GitHub)</div>
+        <div class="qr-desc">Trang lưu trữ mã nguồn lớn nhất</div>
+      </div>
+      
+      <!-- QR Card 4 -->
+      <div class="qr-card">
+        <div class="qr-image-wrapper" id="qr4"></div>
+        <div class="qr-title">Mã số 4 (Đoạn văn bản)</div>
+        <div class="qr-desc">Lời chào từ trợ lý AI Antigravity</div>
+      </div>
+    </div>
+    
+    <div class="footer">
+      Dự án Screen Translator - Tích hợp giải mã QR Code cục bộ.
+    </div>
+  </div>
+
+  <script>
+    // Generate QR Codes dynamically on page load
+    window.addEventListener('DOMContentLoaded', () => {
+      const data = [
+        { id: 'qr1', text: 'https://www.google.com' },
+        { id: 'qr2', text: 'https://www.wikipedia.org' },
+        { id: 'qr3', text: 'https://github.com' },
+        { id: 'qr4', text: 'Xin chào! Bạn đã quét thành công mã QR này bằng Screen Translator. Chúc bạn một ngày tốt lành!' }
+      ];
+      
+      data.forEach(item => {
+        try {
+          const qr = qrcode(0, 'M');
+          qr.addData(item.text);
+          qr.make();
+          const imgUrl = qr.createDataURL(4, 4); // cellSize=4, margin=4
+          document.getElementById(item.id).innerHTML = `<img src="${imgUrl}" alt="QR" style="width: 140px; height: 140px; display: block;">`;
+        } catch (e) {
+          console.error('Failed to generate QR for ' + item.id, e);
+        }
+      });
+    });
+  </script>
+</body>
+</html>

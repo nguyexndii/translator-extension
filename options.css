@@ -330,7 +330,8 @@ a:hover, .chrome-link:hover {
   color: var(--text-color);
 }
 
-.dropdown-item:hover {
+.dropdown-item:hover,
+.dropdown-item.active {
   background-color: var(--hover-bg);
 }
 
@@ -737,6 +738,51 @@ kbd {
 }
 .api-key-input-highlight {
   animation: highlight-pulse 1.5s ease-in-out 3;
+}
+
+/* Backup Section Styling */
+.backup-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.btn-secondary-outline {
+  padding: 8px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background-color: transparent;
+  color: var(--text-color);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+}
+
+.btn-secondary-outline:hover {
+  background-color: var(--hover-bg);
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+/* Clean, subtle & pleasant language transition */
+@keyframes smooth-lang-fade {
+  0% {
+    opacity: 0.65;
+    transform: translateY(-5px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.lang-refresh-anim {
+  animation: smooth-lang-fade 0.22s ease-out forwards;
 }
 
 

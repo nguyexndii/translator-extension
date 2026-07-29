@@ -58,10 +58,10 @@
     },
     "trigger-qr-translation": {
       "suggested_key": {
-        "default": "Alt+Shift+Q",
-        "mac": "Alt+Shift+Q"
+        "default": "Alt+Shift+K",
+        "mac": "Alt+Shift+K"
       },
-      "description": "Chụp quét mã QR trên màn hình"
+      "description": "__MSG_descTriggerQrTranslation__"
     }
   }
 }

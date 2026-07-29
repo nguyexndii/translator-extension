@@ -66,7 +66,7 @@ const OPTIONS_LOCALIZATION = {
     btnAddKey: 'Thêm khóa API',
     secLang: 'Cài đặt chung',
     lblTargetLang: 'Dịch sang ngôn ngữ:',
-    lblTheme: 'Chế độ giao diện (Theme):',
+    lblTheme: 'Chế độ giao diện:',
     secShortcut: 'Phím tắt dịch thuật',
     descShortcut: 'Danh sách phím tắt mặc định dùng để kích hoạt các chế độ dịch:',
     lblShortcutPopup: 'Mở cửa sổ dịch nhanh (Popup):',
@@ -86,7 +86,13 @@ const OPTIONS_LOCALIZATION = {
     btnHideKey: 'Ẩn',
     themeDark: 'Tối',
     themeLight: 'Sáng',
-    footerModel: 'Sử dụng model: gemini-3.1-flash-lite-preview (Tốc độ tối ưu, hỗ trợ đa phương thức)',
+    lblShortcutQr: 'Chụp quét mã QR trên màn hình:',
+    secBackup: 'Sao lưu & Khôi phục dữ liệu',
+    descBackup: 'Xuất tệp sao lưu dữ liệu lịch sử dịch và lịch sử mã QR để cất giữ hoặc chuyển sang máy tính khác.',
+    lblBtnExportBackup: 'Xuất tệp sao lưu (.json)',
+    lblBtnImportBackup: 'Nhập tệp khôi phục (.json)',
+    statusExportSuccess: 'Đã xuất tệp sao lưu lịch sử thành công!',
+    statusImportSuccess: 'Đã khôi phục lịch sử thành công!',
     footerCopyright: 'Phát triển cho mục đích dịch trực tiếp màn hình.',
     guideHtml: `
       <div class="guide-item">
@@ -139,7 +145,13 @@ const OPTIONS_LOCALIZATION = {
     btnHideKey: 'Hide',
     themeDark: 'Dark',
     themeLight: 'Light',
-    footerModel: 'Using model: gemini-3.1-flash-lite-preview (Optimized speed, multimodal support)',
+    lblShortcutQr: 'Capture and scan QR on screen:',
+    secBackup: 'Backup & Restore Data',
+    descBackup: 'Export backup files of translation history and QR history to store or transfer to another computer.',
+    lblBtnExportBackup: 'Export Backup (.json)',
+    lblBtnImportBackup: 'Import Backup (.json)',
+    statusExportSuccess: 'History backup exported successfully!',
+    statusImportSuccess: 'History restored successfully!',
     footerCopyright: 'Developed for screen translation.',
     guideHtml: `
       <div class="guide-item">
@@ -289,26 +301,46 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.storage.local.set({ theme: themeVal });
   });
 
-  // Apply UI translations dynamically
   function applyUiLocalization(lang) {
     currentUiLang = lang;
     const dict = OPTIONS_LOCALIZATION[lang] || OPTIONS_LOCALIZATION.vi;
 
+    // Fast, crisp & smooth transition on container
+    const container = document.querySelector('.options-container') || document.body;
+    container.classList.remove('lang-refresh-anim');
+    void container.offsetWidth; // Force reflow
+    container.classList.add('lang-refresh-anim');
+    setTimeout(() => {
+      container.classList.remove('lang-refresh-anim');
+    }, 250);
+
     document.title = dict.title;
-    document.getElementById('txtTitle').textContent = dict.title;
-    document.getElementById('txtSubtitle').textContent = dict.subtitle;
-    document.getElementById('secApi').textContent = dict.secApi;
-    document.getElementById('descApi').textContent = dict.descApi;
-    btnAddApiKey.textContent = dict.btnAddKey;
-    document.getElementById('secLang').textContent = dict.secLang;
-    document.getElementById('lblTargetLang').textContent = dict.lblTargetLang;
-    document.getElementById('lblTheme').textContent = dict.lblTheme;
-    document.getElementById('secShortcut').textContent = dict.secShortcut;
-    document.getElementById('descShortcut').textContent = dict.descShortcut;
-    document.getElementById('lblShortcutPopup').textContent = dict.lblShortcutPopup;
-    document.getElementById('lblShortcutCrop').textContent = dict.lblShortcutCrop;
-    document.getElementById('lblShortcutText').textContent = dict.lblShortcutText;
-    document.getElementById('lblShortcutHistory').textContent = dict.lblShortcutHistory;
+    const setElemText = (id, text) => {
+      const el = document.getElementById(id);
+      if (el && text !== undefined) el.textContent = text;
+    };
+
+    setElemText('txtTitle', dict.title);
+    setElemText('txtSubtitle', dict.subtitle);
+    setElemText('secApi', dict.secApi);
+    setElemText('descApi', dict.descApi);
+    if (btnAddApiKey) btnAddApiKey.textContent = dict.btnAddKey;
+    setElemText('secLang', dict.secLang);
+    setElemText('lblTargetLang', dict.lblTargetLang);
+    setElemText('lblTheme', dict.lblTheme);
+    setElemText('secShortcut', dict.secShortcut);
+    setElemText('descShortcut', dict.descShortcut);
+    setElemText('lblShortcutPopup', dict.lblShortcutPopup);
+    setElemText('lblShortcutCrop', dict.lblShortcutCrop);
+    setElemText('lblShortcutText', dict.lblShortcutText);
+    setElemText('lblShortcutQr', dict.lblShortcutQr);
+    setElemText('descBrowserShortcut', dict.descBrowserShortcut);
+
+    // Backup & Restore section localization
+    setElemText('secBackup', dict.secBackup);
+    setElemText('descBackup', dict.descBackup);
+    setElemText('lblBtnExportBackup', dict.lblBtnExportBackup);
+    setElemText('lblBtnImportBackup', dict.lblBtnImportBackup);
     
     // Dynamic Select Option Translation for Theme mode
     const optDark = selTheme.querySelector('option[value="dark"]');
@@ -325,14 +357,10 @@ document.addEventListener('DOMContentLoaded', () => {
       input.placeholder = `${labelText}...`;
     });
 
-    const descBrowserShortcutEl = document.getElementById('descBrowserShortcut');
-    if (descBrowserShortcutEl) descBrowserShortcutEl.textContent = dict.descBrowserShortcut;
+    if (btnChangeShortcuts) btnChangeShortcuts.textContent = dict.btnChangeShortcut;
+    if (btnSave) btnSave.textContent = dict.btnSave;
 
-    btnChangeShortcuts.textContent = dict.btnChangeShortcut;
-    btnSave.textContent = dict.btnSave;
-
-    document.getElementById('txtFooterModel').textContent = dict.footerModel;
-    document.getElementById('txtFooterCopyright').textContent = dict.footerCopyright;
+    setElemText('txtFooterCopyright', dict.footerCopyright);
 
     // Localize User Guide
     const secGuideEl = document.getElementById('secGuide');
@@ -375,6 +403,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const elGuide = document.getElementById('guideShortcutText');
             if (elGuide) elGuide.innerHTML = formatted;
+          } else if (cmd.name === 'trigger-qr-translation') {
+            const formatted = formatShortcut(cmd.shortcut, dict.shortcutNotSet, 'Alt + Shift + K');
+            const el = document.getElementById('shortcutQrValue');
+            if (el) el.innerHTML = formatted;
           } else if (cmd.name === 'open-history') {
             const formatted = formatShortcut(cmd.shortcut, dict.shortcutNotSet, 'Alt + Shift + H');
             const el = document.getElementById('shortcutHistoryValue');
@@ -453,6 +485,86 @@ document.addEventListener('DOMContentLoaded', () => {
           }, 4500);
         }
       }, 300);
+    }
+
+    // Backup & Restore Handlers
+    const btnExportBackup = document.getElementById('btnExportBackup');
+    const btnImportBackup = document.getElementById('btnImportBackup');
+    const importFileInput = document.getElementById('importFileInput');
+
+    if (btnExportBackup) {
+      btnExportBackup.addEventListener('click', () => {
+        chrome.storage.local.get(['translationHistory', 'qrHistory'], (allData) => {
+          const dict = OPTIONS_LOCALIZATION[currentUiLang] || OPTIONS_LOCALIZATION.vi;
+          const backupData = {
+            app: 'Screen Translator',
+            version: '1.0',
+            exportDate: new Date().toISOString(),
+            translationHistory: allData.translationHistory || [],
+            qrHistory: allData.qrHistory || []
+          };
+
+          const jsonStr = JSON.stringify(backupData, null, 2);
+          const blob = new Blob([jsonStr], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+
+          const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'screen_translator_history_' + dateStr + '.json';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+
+          showSaveStatus(dict.statusExportSuccess);
+        });
+      });
+    }
+
+    if (btnImportBackup && importFileInput) {
+      btnImportBackup.addEventListener('click', () => {
+        importFileInput.value = '';
+        importFileInput.click();
+      });
+
+      importFileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const dict = OPTIONS_LOCALIZATION[currentUiLang] || OPTIONS_LOCALIZATION.vi;
+        const reader = new FileReader();
+
+        reader.onload = (event) => {
+          try {
+            const importedData = JSON.parse(event.target.result);
+            if (!importedData || (!importedData.translationHistory && !importedData.qrHistory)) {
+              throw new Error('Invalid format');
+            }
+
+            const keysToSave = {};
+
+            if (importedData.translationHistory && Array.isArray(importedData.translationHistory)) {
+              keysToSave.translationHistory = importedData.translationHistory;
+            }
+            if (importedData.qrHistory && Array.isArray(importedData.qrHistory)) {
+              keysToSave.qrHistory = importedData.qrHistory;
+            }
+
+            chrome.storage.local.set(keysToSave, () => {
+              showSaveStatus(dict.statusImportSuccess);
+              setTimeout(() => {
+                window.location.reload();
+              }, 600);
+            });
+
+          } catch (err) {
+            showSaveStatus(dict.statusImportError || 'Tệp sao lưu không hợp lệ!');
+          }
+        };
+
+        reader.readAsText(file);
+      });
     }
   });
 
@@ -627,18 +739,47 @@ document.addEventListener('DOMContentLoaded', () => {
   function initSearchableDropdown(inputEl, listEl, getItemsFn, onChange) {
     let selectedValue = '';
     let activeLabel = '';
+    let highlightedIndex = -1;
+    let currentFiltered = [];
+
+    function updateHighlight() {
+      const items = listEl.querySelectorAll('.dropdown-item');
+      items.forEach((item, idx) => {
+        if (idx === highlightedIndex) {
+          item.classList.add('active');
+          item.scrollIntoView({ block: 'nearest' });
+        } else {
+          item.classList.remove('active');
+        }
+      });
+    }
+
+    function selectItem(idx) {
+      if (idx < 0 || idx >= currentFiltered.length) return;
+      const item = currentFiltered[idx];
+      selectedValue = item.value;
+      activeLabel = item.label;
+      inputEl.value = activeLabel;
+      listEl.style.display = 'none';
+      highlightedIndex = -1;
+      inputEl.blur();
+      onChange(selectedValue);
+    }
 
     function renderList(filterText = '') {
       listEl.innerHTML = '';
       const itemsList = getItemsFn();
-      const filtered = itemsList.filter(item => {
-        const labelClean = removeAccents(item.label);
-        const valClean = removeAccents(item.value);
-        const filterClean = removeAccents(filterText.trim());
-        return labelClean.includes(filterClean) || valClean.includes(filterClean);
+      const filterClean = removeAccents(filterText.trim());
+
+      currentFiltered = itemsList.filter(item => {
+        const labelClean = removeAccents(item.label || '');
+        const valClean = removeAccents(item.value || '');
+        const codeClean = removeAccents(item.code || '');
+        return labelClean.includes(filterClean) || valClean.includes(filterClean) || (codeClean && codeClean.includes(filterClean));
       });
 
-      if (filtered.length === 0) {
+      if (currentFiltered.length === 0) {
+        highlightedIndex = -1;
         const emptyDiv = document.createElement('div');
         emptyDiv.className = 'dropdown-item';
         emptyDiv.style.color = '#9aa0a6';
@@ -648,31 +789,97 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      filtered.forEach(item => {
+      if (highlightedIndex < 0 || highlightedIndex >= currentFiltered.length) {
+        highlightedIndex = 0;
+      }
+
+      currentFiltered.forEach((item, idx) => {
         const row = document.createElement('div');
         row.className = 'dropdown-item';
+        if (idx === highlightedIndex) {
+          row.classList.add('active');
+        }
         row.textContent = item.label;
         row.setAttribute('data-value', item.value);
+
+        row.addEventListener('mouseenter', () => {
+          highlightedIndex = idx;
+          updateHighlight();
+        });
+
         row.addEventListener('click', (e) => {
-          selectedValue = item.value;
-          activeLabel = item.label;
-          inputEl.value = activeLabel;
-          listEl.style.display = 'none';
-          onChange(selectedValue);
+          selectItem(idx);
           e.stopPropagation();
         });
+
         listEl.appendChild(row);
       });
+
+      updateHighlight();
     }
 
     inputEl.addEventListener('focus', () => {
       inputEl.value = '';
+      highlightedIndex = 0;
       renderList('');
       listEl.style.display = 'block';
     });
 
     inputEl.addEventListener('input', () => {
+      highlightedIndex = 0;
       renderList(inputEl.value);
+      listEl.style.display = 'block';
+    });
+
+    inputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (listEl.style.display === 'none') {
+          listEl.style.display = 'block';
+          renderList(inputEl.value);
+          return;
+        }
+        if (currentFiltered.length === 0) return;
+        if (highlightedIndex < 0) {
+          highlightedIndex = 0;
+        } else if (highlightedIndex >= currentFiltered.length - 1) {
+          highlightedIndex = 0; // Wrap around to top
+        } else {
+          highlightedIndex++;
+        }
+        updateHighlight();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (listEl.style.display === 'none') {
+          listEl.style.display = 'block';
+          renderList(inputEl.value);
+          return;
+        }
+        if (currentFiltered.length === 0) return;
+        if (highlightedIndex <= 0) {
+          highlightedIndex = currentFiltered.length - 1; // Wrap around to bottom
+        } else {
+          highlightedIndex--;
+        }
+        updateHighlight();
+      } else if (e.key === 'Enter') {
+        if (listEl.style.display === 'block') {
+          e.preventDefault();
+          e.stopPropagation();
+          if (highlightedIndex >= 0 && highlightedIndex < currentFiltered.length) {
+            selectItem(highlightedIndex);
+          } else if (currentFiltered.length > 0) {
+            selectItem(0);
+          }
+        }
+      } else if (e.key === 'Escape') {
+        if (listEl.style.display === 'block') {
+          e.preventDefault();
+          listEl.style.display = 'none';
+          inputEl.value = activeLabel;
+          inputEl.blur();
+        }
+      }
     });
 
     document.addEventListener('click', (e) => {

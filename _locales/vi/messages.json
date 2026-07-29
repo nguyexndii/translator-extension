@@ -16,5 +16,8 @@
   },
   "descOpenHistory": {
     "message": "Mở trang Lịch sử dịch thuật"
+  },
+  "descTriggerQrTranslation": {
+    "message": "Chụp quét mã QR trên màn hình"
   }
 }
