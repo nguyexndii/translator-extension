@@ -487,21 +487,26 @@ document.addEventListener('DOMContentLoaded', () => {
       }, 300);
     }
 
-    // Backup & Restore Handlers
+    // Backup & Restore Handlers (Complete History & Settings)
     const btnExportBackup = document.getElementById('btnExportBackup');
     const btnImportBackup = document.getElementById('btnImportBackup');
     const importFileInput = document.getElementById('importFileInput');
 
     if (btnExportBackup) {
       btnExportBackup.addEventListener('click', () => {
-        chrome.storage.local.get(['translationHistory', 'qrHistory'], (allData) => {
+        chrome.storage.local.get(['translationHistory', 'qrHistory', 'targetLang', 'uiLang', 'theme'], (allData) => {
           const dict = OPTIONS_LOCALIZATION[currentUiLang] || OPTIONS_LOCALIZATION.vi;
           const backupData = {
             app: 'Screen Translator',
             version: '1.0',
             exportDate: new Date().toISOString(),
             translationHistory: allData.translationHistory || [],
-            qrHistory: allData.qrHistory || []
+            qrHistory: allData.qrHistory || [],
+            settings: {
+              targetLang: allData.targetLang || 'Vietnamese',
+              uiLang: allData.uiLang || 'en',
+              theme: allData.theme || 'dark'
+            }
           };
 
           const jsonStr = JSON.stringify(backupData, null, 2);
@@ -511,7 +516,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
           const a = document.createElement('a');
           a.href = url;
-          a.download = 'screen_translator_history_' + dateStr + '.json';
+          a.download = 'screen_translator_backup_' + dateStr + '.json';
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
@@ -538,28 +543,100 @@ document.addEventListener('DOMContentLoaded', () => {
         reader.onload = (event) => {
           try {
             const importedData = JSON.parse(event.target.result);
-            if (!importedData || (!importedData.translationHistory && !importedData.qrHistory)) {
-              throw new Error('Invalid format');
+            if (!importedData) throw new Error('Invalid format');
+
+            let importedTranslationHistory = null;
+            let importedQrHistory = null;
+
+            if (Array.isArray(importedData)) {
+              importedTranslationHistory = importedData;
+            } else {
+              if (Array.isArray(importedData.translationHistory)) {
+                importedTranslationHistory = importedData.translationHistory;
+              } else if (Array.isArray(importedData.history)) {
+                importedTranslationHistory = importedData.history;
+              } else if (Array.isArray(importedData.translations)) {
+                importedTranslationHistory = importedData.translations;
+              }
+
+              if (Array.isArray(importedData.qrHistory)) {
+                importedQrHistory = importedData.qrHistory;
+              }
             }
 
-            const keysToSave = {};
-
-            if (importedData.translationHistory && Array.isArray(importedData.translationHistory)) {
-              keysToSave.translationHistory = importedData.translationHistory;
-            }
-            if (importedData.qrHistory && Array.isArray(importedData.qrHistory)) {
-              keysToSave.qrHistory = importedData.qrHistory;
+            if (!importedTranslationHistory && !importedQrHistory) {
+              throw new Error('No valid history data found in file');
             }
 
-            chrome.storage.local.set(keysToSave, () => {
-              showSaveStatus(dict.statusImportSuccess);
-              setTimeout(() => {
-                window.location.reload();
-              }, 600);
+            chrome.storage.local.get(['translationHistory', 'qrHistory'], (existingData) => {
+              const keysToSave = {};
+
+              if (importedTranslationHistory) {
+                const existingList = existingData.translationHistory || [];
+                const mergedMap = new Map();
+
+                importedTranslationHistory.forEach(item => {
+                  if (item && (item.original || item.translated)) {
+                    const key = item.id || (item.timestamp + '_' + (item.original || ''));
+                    mergedMap.set(key, item);
+                  }
+                });
+
+                existingList.forEach(item => {
+                  if (item && (item.original || item.translated)) {
+                    const key = item.id || (item.timestamp + '_' + (item.original || ''));
+                    if (!mergedMap.has(key)) {
+                      mergedMap.set(key, item);
+                    }
+                  }
+                });
+
+                const mergedArray = Array.from(mergedMap.values());
+                mergedArray.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                keysToSave.translationHistory = mergedArray;
+              }
+
+              if (importedQrHistory) {
+                const existingQr = existingData.qrHistory || [];
+                const mergedQrMap = new Map();
+
+                importedQrHistory.forEach(item => {
+                  if (item && item.content) {
+                    const key = item.id || (item.timestamp + '_' + item.content);
+                    mergedQrMap.set(key, item);
+                  }
+                });
+
+                existingQr.forEach(item => {
+                  if (item && item.content) {
+                    const key = item.id || (item.timestamp + '_' + item.content);
+                    if (!mergedQrMap.has(key)) {
+                      mergedQrMap.set(key, item);
+                    }
+                  }
+                });
+
+                const mergedQrArray = Array.from(mergedQrMap.values());
+                mergedQrArray.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                keysToSave.qrHistory = mergedQrArray;
+              }
+
+              if (importedData.settings) {
+                if (importedData.settings.targetLang) keysToSave.targetLang = importedData.settings.targetLang;
+                if (importedData.settings.theme) keysToSave.theme = importedData.settings.theme;
+              }
+
+              chrome.storage.local.set(keysToSave, () => {
+                showSaveStatus(dict.statusImportSuccess);
+                setTimeout(() => {
+                  window.location.reload();
+                }, 600);
+              });
             });
 
           } catch (err) {
-            showSaveStatus(dict.statusImportError || 'Tệp sao lưu không hợp lệ!');
+            console.warn('Backup import error:', err);
+            showSaveStatus(dict.statusImportError || 'Tệp sao lưu không hợp lệ!', true);
           }
         };
 

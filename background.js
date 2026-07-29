@@ -675,10 +675,6 @@ function addToHistory(original, translated, sourceLang, targetLang) {
     };
     
     history.unshift(newItem);
-    if (history.length > 200) {
-      history = history.slice(0, 200);
-    }
-    
     chrome.storage.local.set({ translationHistory: history });
   });
 }
@@ -704,10 +700,6 @@ function addQrToHistory(type, content) {
     };
     
     history.unshift(newItem);
-    if (history.length > 200) {
-      history = history.slice(0, 200);
-    }
-    
     chrome.storage.local.set({ qrHistory: history });
   });
 }
