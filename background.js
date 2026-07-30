@@ -1,8 +1,6 @@
 // Central Gemini AI Model Configuration
 const GEMINI_MODELS = [
-  'gemini-3.1-flash-lite',
-  'gemini-2.5-flash',
-  'gemini-1.5-flash'
+  'gemini-3.1-flash-lite'
 ];
 
 function buildMasterTranslationPrompt(text, targetLang, context = null) {
