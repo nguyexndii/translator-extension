@@ -607,10 +607,11 @@
       return;
     }
 
-    // Render each block exactly at its original position
+    // Render each block exactly at its position or full selection card
     data.translations.forEach(item => {
-      const box = item.box_2d; // [ymin, xmin, ymax, xmax] relative to 0-1000
-      if (!box || box.length !== 4) return;
+      const box = (item.box_2d && Array.isArray(item.box_2d) && item.box_2d.length === 4) 
+        ? item.box_2d 
+        : [0, 0, 1000, 1000];
 
       const ymin = box[0];
       const xmin = box[1];

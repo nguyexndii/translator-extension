@@ -1,6 +1,8 @@
 // Central Gemini AI Model Configuration
 const GEMINI_MODELS = [
-  'gemini-3.1-flash-lite'
+  'gemini-3.1-flash-lite',
+  'gemini-2.5-flash',
+  'gemini-1.5-flash'
 ];
 
 function buildMasterTranslationPrompt(text, targetLang, context = null) {
@@ -307,6 +309,52 @@ async function ensureContentScriptActive(tabId) {
   }
 }
 
+// Ultra-fast background image cropping using OffscreenCanvas & createImageBitmap (prevents 8MB IPC overhead)
+async function cropScreenshotInBackground(fullBase64, rect, dpr) {
+  try {
+    const res = await fetch(fullBase64);
+    const blob = await res.blob();
+    const bitmap = await createImageBitmap(blob);
+
+    const maxDim = 650;
+    let targetW = rect.w;
+    let targetH = rect.h;
+    if (targetW > maxDim || targetH > maxDim) {
+      const scale = Math.min(maxDim / targetW, maxDim / targetH);
+      targetW = Math.round(targetW * scale);
+      targetH = Math.round(targetH * scale);
+    }
+
+    const canvas = new OffscreenCanvas(targetW, targetH);
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(
+      bitmap,
+      Math.round(rect.x * dpr),
+      Math.round(rect.y * dpr),
+      Math.round(rect.w * dpr),
+      Math.round(rect.h * dpr),
+      0,
+      0,
+      targetW,
+      targetH
+    );
+
+    const croppedBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.65 });
+    const arrayBuffer = await croppedBlob.arrayBuffer();
+    
+    let binary = '';
+    const bytes = new Uint8Array(arrayBuffer);
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return 'data:image/jpeg;base64,' + btoa(binary);
+  } catch (err) {
+    console.warn('Background OffscreenCanvas crop failed, fallback to content script:', err);
+    return null;
+  }
+}
+
 async function handleCropAndTranslation(tabId, rect, dpr, context, pageScrollX = 0, pageScrollY = 0) {
   await ensureContentScriptActive(tabId);
   const controller = registerController(tabId);
@@ -321,15 +369,28 @@ async function handleCropAndTranslation(tabId, rect, dpr, context, pageScrollX =
 
     if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
 
-    // Capture the entire visible viewport of the active tab
+    // Capture the entire visible viewport of the active tab at quality 50 for ultra-fast capture
     const fullScreenshotBase64 = await chrome.tabs.captureVisibleTab(null, {
       format: 'jpeg',
-      quality: 85
+      quality: 50
     });
 
     if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
 
-    // Ask content script to crop the image using client canvas
+    const loadingDichText = uiLang === 'en' ? 'Translating...' : 'Đang dịch...';
+    
+    // Attempt ultra-fast direct background cropping first
+    let croppedBase64 = await cropScreenshotInBackground(fullScreenshotBase64, rect, dpr);
+
+    if (croppedBase64) {
+      if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
+      chrome.tabs.sendMessage(tabId, { action: 'show-loading', text: loadingDichText });
+      await executeGeminiImageTranslation(tabId, croppedBase64, rect, context, uiLang, pageScrollX, pageScrollY, controller);
+      clearController(tabId, controller);
+      return;
+    }
+
+    // Fallback: Ask content script to crop the image using client canvas
     chrome.tabs.sendMessage(tabId, {
       action: 'crop-screenshot',
       base64Data: fullScreenshotBase64,
@@ -339,22 +400,15 @@ async function handleCropAndTranslation(tabId, rect, dpr, context, pageScrollX =
       try {
         if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
 
-        if (!response) {
-          const errNoResp = uiLang === 'en' ? 'Failed to crop screen selection.' : 'Không thể phản hồi từ trang web để cắt ảnh.';
+        if (!response || response.error) {
+          const errNoResp = response?.error || (uiLang === 'en' ? 'Failed to crop screen selection.' : 'Không thể phản hồi từ trang web để cắt ảnh.');
           chrome.tabs.sendMessage(tabId, { action: 'show-error', error: errNoResp });
           return;
         }
 
-        if (response.error) {
-          chrome.tabs.sendMessage(tabId, { action: 'show-error', error: response.error });
-          return;
-        }
-
-        const croppedBase64 = response.croppedBase64;
-        const loadingDichText = uiLang === 'en' ? 'Translating...' : 'Đang dịch...';
-        
+        const croppedBase64Fallback = response.croppedBase64;
         chrome.tabs.sendMessage(tabId, { action: 'show-loading', text: loadingDichText });
-        await executeGeminiImageTranslation(tabId, croppedBase64, rect, context, uiLang, pageScrollX, pageScrollY, controller);
+        await executeGeminiImageTranslation(tabId, croppedBase64Fallback, rect, context, uiLang, pageScrollX, pageScrollY, controller);
       } catch (err) {
         if (err.name === 'AbortError') {
           console.log('Image translation aborted by user');
@@ -405,19 +459,19 @@ async function executeGeminiImageTranslation(tabId, croppedBase64, rect, context
 Use this context to accurately translate character/object names, coding terms, slang, or media elements. If there are technical codes or special gaming terms, keep them in standard formats.` : '';
 
   // Construct ultra-fast request payload with gaming & slang context
-  const prompt = `Translate all visible text in this image to ${targetLang}.
+  const prompt = `Identify and translate all visible text in this image to ${targetLang}.
 TRANSLATION QUALITY INSTRUCTIONS:
 - Translate accurately into natural, context-aware ${targetLang}.
 - Recognize gaming terminology (Valorant, CS:GO, LoL, FPS/MOBA/RPGs), anime, tech terms, and internet memes:
   * "flash" in gaming/FPS context refers to flashbang/blind ability ("quả mù", "chiêu mù", or "flash"), NOT "lướt" (dash).
   * "dash" refers to mobility skills ("lướt").
   * Keep character names (e.g. Yoru, Jett, Reyna), item/skill names, and gaming slang in standard gaming terminology.
+- Preserve line breaks and paragraph structure.
 Return JSON matching schema:
 {
   "detected_source_language": "Language Name",
   "translations": [
     {
-      "box_2d": [0, 0, 1000, 1000],
       "original_text": "original text",
       "translated_text": "translated text"
     }
@@ -921,10 +975,10 @@ async function handleQrCropAndDecoding(tabId, rect, dpr, pageScrollX = 0, pageSc
 
     if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
 
-    // Capture the entire visible viewport
+    // Capture the entire visible viewport at quality 50 for fast capture
     const fullScreenshotBase64 = await chrome.tabs.captureVisibleTab(null, {
       format: 'jpeg',
-      quality: 85
+      quality: 50
     });
 
     if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
