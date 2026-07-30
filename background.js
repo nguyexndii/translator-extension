@@ -310,11 +310,13 @@ async function ensureContentScriptActive(tabId) {
 // Ultra-fast background image cropping using OffscreenCanvas & createImageBitmap (prevents 8MB IPC overhead)
 async function cropScreenshotInBackground(fullBase64, rect, dpr) {
   try {
+    const tCropStart = performance.now();
     const res = await fetch(fullBase64);
     const blob = await res.blob();
     const bitmap = await createImageBitmap(blob);
 
-    const maxDim = 650;
+    // Max 500px dimension ensures lightweight ~15KB payload for ultra-fast Gemini Vision processing
+    const maxDim = 500;
     let targetW = rect.w;
     let targetH = rect.h;
     if (targetW > maxDim || targetH > maxDim) {
@@ -337,7 +339,7 @@ async function cropScreenshotInBackground(fullBase64, rect, dpr) {
       targetH
     );
 
-    const croppedBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.65 });
+    const croppedBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.6 });
     const arrayBuffer = await croppedBlob.arrayBuffer();
     
     let binary = '';
@@ -346,7 +348,9 @@ async function cropScreenshotInBackground(fullBase64, rect, dpr) {
     for (let i = 0; i < len; i++) {
       binary += String.fromCharCode(bytes[i]);
     }
-    return 'data:image/jpeg;base64,' + btoa(binary);
+    const croppedData = 'data:image/jpeg;base64,' + btoa(binary);
+    console.log(`⚡ [Perf] OffscreenCanvas crop completed in ${(performance.now() - tCropStart).toFixed(1)}ms (${targetW}x${targetH}px)`);
+    return croppedData;
   } catch (err) {
     console.warn('Background OffscreenCanvas crop failed, fallback to content script:', err);
     return null;
@@ -354,7 +358,7 @@ async function cropScreenshotInBackground(fullBase64, rect, dpr) {
 }
 
 async function handleCropAndTranslation(tabId, rect, dpr, context, pageScrollX = 0, pageScrollY = 0) {
-  await ensureContentScriptActive(tabId);
+  const tTotalStart = performance.now();
   const controller = registerController(tabId);
   try {
     const storage = await new Promise((resolve) => {
@@ -367,23 +371,37 @@ async function handleCropAndTranslation(tabId, rect, dpr, context, pageScrollX =
 
     if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
 
-    // Capture the entire visible viewport of the active tab at quality 50 for ultra-fast capture
+    const tCaptureStart = performance.now();
+    // Capture visible viewport at quality 50 for fast capture
     const fullScreenshotBase64 = await chrome.tabs.captureVisibleTab(null, {
       format: 'jpeg',
       quality: 50
     });
+    const captureTime = performance.now() - tCaptureStart;
 
     if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
 
     const loadingDichText = uiLang === 'en' ? 'Translating...' : 'Đang dịch...';
     
-    // Attempt ultra-fast direct background cropping first
+    const tCropStart = performance.now();
     let croppedBase64 = await cropScreenshotInBackground(fullScreenshotBase64, rect, dpr);
+    const cropTime = performance.now() - tCropStart;
 
     if (croppedBase64) {
       if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
       chrome.tabs.sendMessage(tabId, { action: 'show-loading', text: loadingDichText });
+      
+      const tApiStart = performance.now();
       await executeGeminiImageTranslation(tabId, croppedBase64, rect, context, uiLang, pageScrollX, pageScrollY, controller);
+      const apiTime = performance.now() - tApiStart;
+      const totalTime = performance.now() - tTotalStart;
+
+      console.log(`📊 [Crop Translation Performance Metrics]:
+  • Viewport Capture: ${captureTime.toFixed(1)}ms
+  • Image Cropping:   ${cropTime.toFixed(1)}ms
+  • Gemini API Call:  ${apiTime.toFixed(1)}ms
+  • TOTAL PIPELINE:   ${totalTime.toFixed(1)}ms`);
+
       clearController(tabId, controller);
       return;
     }
@@ -406,7 +424,17 @@ async function handleCropAndTranslation(tabId, rect, dpr, context, pageScrollX =
 
         const croppedBase64Fallback = response.croppedBase64;
         chrome.tabs.sendMessage(tabId, { action: 'show-loading', text: loadingDichText });
+        
+        const tApiStart = performance.now();
         await executeGeminiImageTranslation(tabId, croppedBase64Fallback, rect, context, uiLang, pageScrollX, pageScrollY, controller);
+        const apiTime = performance.now() - tApiStart;
+        const totalTime = performance.now() - tTotalStart;
+
+        console.log(`📊 [Crop Translation Fallback Metrics]:
+  • Viewport Capture: ${captureTime.toFixed(1)}ms
+  • Gemini API Call:  ${apiTime.toFixed(1)}ms
+  • TOTAL PIPELINE:   ${totalTime.toFixed(1)}ms`);
+
       } catch (err) {
         if (err.name === 'AbortError') {
           console.log('Image translation aborted by user');
@@ -654,6 +682,8 @@ async function callGeminiAPI(url, payload, externalSignal) {
     externalSignal.addEventListener('abort', () => timeoutController.abort());
   }
 
+  const tApiStart = performance.now();
+
   try {
     const response = await fetch(url, {
       method: 'POST',
@@ -665,6 +695,7 @@ async function callGeminiAPI(url, payload, externalSignal) {
     });
 
     clearTimeout(timeoutId);
+    console.log(`🌐 [Gemini API Response Time]: ${(performance.now() - tApiStart).toFixed(1)}ms`);
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
