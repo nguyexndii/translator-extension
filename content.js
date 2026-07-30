@@ -638,15 +638,27 @@
       block.style.left = boxLeft + 'px';
       block.style.top = boxTop + 'px';
       
+      // Format translated text to join short vertical line breaks into natural sentences
+      let textVal = (item.translated_text || '').trim();
+      if (!isText && textVal.includes('\n')) {
+        const rawLines = textVal.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+        if (rawLines.length > 1) {
+          const avgLen = rawLines.reduce((sum, l) => sum + l.length, 0) / rawLines.length;
+          // If lines are short (average < 25 chars per line), merge into continuous sentence
+          if (avgLen < 25) {
+            textVal = rawLines.join(' ');
+          }
+        }
+      }
+
       // Auto width and compact fit around text content
       block.style.width = 'fit-content';
-      block.style.minWidth = 'auto';
-      block.style.maxWidth = Math.min(window.innerWidth - 60, Math.max(rect.w + 60, 320)) + 'px';
+      block.style.minWidth = isText ? 'auto' : '200px';
+      block.style.maxWidth = Math.min(window.innerWidth - 60, Math.max(rect.w + 120, 360)) + 'px';
       block.style.height = 'auto';
       block.style.minHeight = 'auto';
 
       // Keep single-line translations on 1 continuous line without forced wrapping
-      const textVal = item.translated_text || '';
       if (isText || !textVal.includes('\n')) {
         block.style.whiteSpace = 'nowrap';
       } else {
@@ -658,12 +670,12 @@
       if (isText) {
         fontSize = 13;
       } else if (origHeight > 0) {
-        fontSize = Math.max(11, Math.min(origHeight * 0.7, 14));
+        fontSize = Math.max(12, Math.min(origHeight * 0.7, 14));
       }
       block.style.fontSize = fontSize + 'px';
 
       const textWrapper = document.createElement('span');
-      textWrapper.textContent = item.translated_text;
+      textWrapper.textContent = textVal;
 
       let dragHandle = block;
       if (isText) {

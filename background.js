@@ -464,7 +464,7 @@ TRANSLATION QUALITY INSTRUCTIONS:
   * "flash" in gaming/FPS context refers to flashbang/blind ability ("quả mù", "chiêu mù", or "flash"), NOT "lướt" (dash).
   * "dash" refers to mobility skills ("lướt").
   * Keep character names (e.g. Yoru, Jett, Reyna), item/skill names, and gaming slang in standard gaming terminology.
-- Preserve line breaks and paragraph structure.
+- Output clean, continuous natural sentences. Do NOT output 1-word vertical line breaks for titles, covers, or vertical poster text.
 Return JSON matching schema:
 {
   "detected_source_language": "Language Name",
@@ -493,7 +493,8 @@ Return JSON matching schema:
       }
     ],
     generationConfig: {
-      responseMimeType: 'application/json'
+      responseMimeType: 'application/json',
+      temperature: 0.2
     }
   };
 
