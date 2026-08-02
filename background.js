@@ -8,22 +8,24 @@ function buildMasterTranslationPrompt(text, targetLang, context = null) {
 - Domain: "${context.domain || ''}"
 - Page Title: "${context.pageTitle || ''}"` : '';
 
-  return `You are an elite, context-aware expert translator. Your mission is to translate the input text into natural, fluent, and highly accurate ${targetLang}.
+  return `You are a world-class expert translator specializing in natural, fluent, and highly polished translations into ${targetLang}.
 
-CONTEXT ANALYSIS & DOMAIN ADAPTATION INSTRUCTIONS:
-1. DOMAIN IDENTIFICATION: First analyze the domain of the input (e.g. Gaming/Esports, Tech/Programming, Anime/Manga, Internet Memes, Business, Literature, Casual Chat). Adapt terminology, tone, and phrasing specifically for that domain.
-2. GAMING & ESPORTS (FPS/MOBA/RPG):
-   - "flash" in gaming/FPS context refers to flashbang/blind skills ("quả mù", "chiêu mù", "flash"), NOT "lướt" (dash).
-   - "dash" refers to mobility skills ("lướt", "tốc biến lướt").
-   - "ult" / "ultimate" = "chiêu cuối" / "ult". "cooldown" = "hồi chiêu".
-   - Keep agent/hero/champion names (e.g., Yoru, Jett, Reyna, Ahri), item names, and standard gaming jargon natural in gaming parlance.
-3. PROGRAMMING & TECH: Keep code syntax, variable names, API endpoints, function names, and technical terms intact or standard in technical Vietnamese.
-4. SLANG & IDIOMS: Do NOT translate idioms or slang word-for-word. Translate the true figurative meaning into natural, conversational ${targetLang}.
-5. FORMATTING: Preserve all exact paragraph structures, line breaks, code snippets, and whitespace formatting.
+CRITICAL TRANSLATION QUALITY INSTRUCTIONS:
+1. NATURAL & FLUENT PHRASING (VĂN PHONG MƯỢT MÀ, TỰ NHIÊN):
+   - Translate with natural native fluency. Avoid stiff, literal, or robotic word-for-word translations.
+   - Express ideas smoothly as a professional native speaker of ${targetLang} would naturally write.
+2. STRICT PUNCTUATION & SYMBOL PRESERVATION:
+   - Preserve ALL numbers, units, bullet points, hyphens, and middle dot separators '·' (e.g. '250.730 biên tập viên tích cực · 7.217.784 bài viết bằng tiếng Anh').
+   - NEVER drop middle dots '·' or structural separators between statistics, items, or numbers.
+3. CONTEXT & DOMAIN ADAPTATION:
+   - GAMING/ESPORTS: "flash" = "quả mù" / "chiêu mù" / "flash" (NOT "lướt"). "dash" = "lướt". "ult"/"ultimate" = "chiêu cuối". Keep hero/champion/item names natural.
+   - TECH/PROGRAMMING: Keep code syntax, API endpoints, variable names, and function signatures intact.
+   - IDIOMS & SLANG: Translate the true figurative meaning naturally into everyday expressions.
+4. FORMATTING: Preserve exact paragraph structures, line breaks, lists, and whitespace layout.
 
-Return a JSON object with schema:
+Return JSON schema:
 {
-  "detected_source_language": "detected source language in English (e.g. English, Japanese)",
+  "detected_source_language": "Language Name",
   "translated_text": "translated text"
 }${contextStr}
 
@@ -486,13 +488,16 @@ Use this context to accurately translate character/object names, coding terms, s
 
   // Construct ultra-fast request payload with gaming & slang context
   const prompt = `Identify and translate all visible text in this image to ${targetLang}.
-TRANSLATION QUALITY INSTRUCTIONS:
-- Translate accurately into natural, context-aware ${targetLang}.
-- Recognize gaming terminology (Valorant, CS:GO, LoL, FPS/MOBA/RPGs), anime, tech terms, and internet memes:
-  * "flash" in gaming/FPS context refers to flashbang/blind ability ("quả mù", "chiêu mù", or "flash"), NOT "lướt" (dash).
-  * "dash" refers to mobility skills ("lướt").
-  * Keep character names (e.g. Yoru, Jett, Reyna), item/skill names, and gaming slang in standard gaming terminology.
-- Output clean, continuous natural sentences. Do NOT output 1-word vertical line breaks for titles, covers, or vertical poster text.
+
+CRITICAL TRANSLATION QUALITY INSTRUCTIONS:
+- Translate accurately into smooth, elegant, and natural native ${targetLang}. Avoid literal or awkward translations.
+- PRESERVE SYMBOLS & SEPARATORS: Maintain all numbers, units, bullet points, hyphens, and middle dot separators '·' (e.g., '250.730 biên tập viên tích cực · 7.217.784 bài viết bằng tiếng Anh'). NEVER delete middle dots '·' or punctuation between statistical metrics or list items.
+- GAMING & TECH TERMINOLOGY:
+  * "flash" = flashbang/blind ability ("quả mù", "chiêu mù", or "flash"), NOT "lướt" (dash).
+  * "dash" = mobility skills ("lướt").
+  * Keep character/item/skill names in standard gaming/tech terminology.
+- Output clean, continuous natural sentences and preserve paragraph structures.
+
 Return JSON matching schema:
 {
   "detected_source_language": "Language Name",
@@ -915,12 +920,13 @@ async function handleImageTranslationFromPopup(base64Data, targetLang, sendRespo
     const base64ImageBytes = base64Data.split(',')[1];
     const mimeType = base64Data.split(',')[0].split(':')[1].split(';')[0] || 'image/jpeg';
 
-    const prompt = `Identify only actual written text characters visible in this image and translate them to ${targetLang}.
-CRITICAL INSTRUCTIONS:
+    const prompt = `Identify and translate only actual written text characters visible in this image into ${targetLang}.
+CRITICAL TRANSLATION QUALITY INSTRUCTIONS:
+- Translate into smooth, highly natural, and polished native ${targetLang}. Avoid stiff or awkward word-for-word translations.
+- PRESERVE NUMBERS & SYMBOLS: Maintain all numbers, units, bullet points, hyphens, and middle dot separators '·' (e.g. '250.730 biên tập viên tích cực · 7.217.784 bài viết bằng tiếng Anh'). NEVER delete middle dots '·' or separators between stats or items.
 - Do NOT guess, describe, or hallucinate text.
 - Do NOT decode, translate, or describe QR codes, barcodes, icons, logos, or visual patterns. A QR code is NOT written text characters.
 - If there are no actual written text characters (letters, numbers, sentences) in the image, you MUST return empty strings "" for both "original_text" and "translated_text".
-- Do not make up text based on context (e.g., seeing a QR code does not mean there is text saying "Scan QR code").
 
 Return a JSON object matching this schema:
 {

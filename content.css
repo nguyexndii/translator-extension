@@ -36,12 +36,10 @@
   border-radius: 8px !important;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
   font-weight: 500 !important;
-  line-height: 1.3 !important;
-  white-space: nowrap !important;
-  width: fit-content !important;
+  line-height: 1.4 !important;
+  white-space: pre-wrap !important;
+  word-break: break-word !important;
   max-width: calc(100vw - 40px) !important;
-  height: auto !important;
-  min-height: auto !important;
   overflow: visible !important;
   cursor: move !important; /* Visual indicator for dragging */
   user-select: text !important;
@@ -49,33 +47,51 @@
   /* Modern sleek dark container fitting compactly around text */
   background: rgba(18, 18, 22, 0.94) !important;
   color: #ffffff !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border: 2px solid rgba(255, 255, 255, 0.12) !important;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5) !important;
   backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  transition: background-color 0.15s ease, backdrop-filter 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease !important;
 }
 
-/* Compact style for text selection translation blocks */
+/* Sleek compact popover style for text selection translation blocks */
 .gst-text-block {
-  background: linear-gradient(135deg, rgba(20, 20, 25, 0.92) 0%, rgba(10, 10, 14, 0.96) 100%) !important;
+  background: linear-gradient(135deg, rgba(20, 20, 25, 0.95) 0%, rgba(10, 10, 14, 0.98) 100%) !important;
   backdrop-filter: blur(16px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
   border-radius: 10px !important;
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.55), inset 0 1px 0 0 rgba(255, 255, 255, 0.12) !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
-  padding: 8px 14px !important;
-  display: inline-flex !important;
-  flex-direction: column !important;
-  align-items: flex-start !important;
-  justify-content: flex-start !important;
+  box-shadow: 0 10px 36px rgba(0, 0, 0, 0.65), inset 0 1px 0 0 rgba(255, 255, 255, 0.14) !important;
+  border: 2px solid rgba(255, 255, 255, 0.15) !important;
+  padding: 10px 16px !important;
+  display: block !important; /* CRITICAL: block display prevents flex column character-wrap collapse */
   text-align: left !important;
-  width: fit-content !important;
+  width: auto !important;
+  min-width: 280px !important;
   max-width: calc(100vw - 40px) !important;
-  height: auto !important;
-  min-height: auto !important;
-  white-space: nowrap !important;
+  white-space: pre-wrap !important;
+  word-break: normal !important;
+  overflow-wrap: break-word !important;
+  line-height: 1.5 !important;
 }
 
+/* Hover-to-transparent effect: Hide text & dark background, disable blur, keep 2px dashed outline border.
+   CRITICAL: Do NOT use visibility:hidden to avoid hit-test loss and hover flicker loop! */
+.gst-translation-block:hover,
 .gst-text-block:hover {
-  opacity: 0.15 !important;
+  background: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: none !important;
+  border: 2px dashed #8ab4f8 !important;
+  outline: none !important;
+  border-radius: 8px !important;
+  box-sizing: border-box !important;
+}
+
+.gst-translation-block:hover *,
+.gst-text-block:hover * {
+  opacity: 0 !important;
+  color: transparent !important;
 }
 
 /* Merged badge inside text block */
@@ -351,10 +367,11 @@
   border: none !important;
   box-shadow: none !important;
   text-shadow: none !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  padding: 0 !important; /* Reset padding for accurate alignment */
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  display: block !important;
   pointer-events: none !important; /* Pass mouse events through transparent outer block */
 }
 
@@ -362,38 +379,45 @@
 .gst-translation-block-inner {
   background: var(--gst-bg-color, rgba(16, 16, 20, 0.95)) !important;
   color: var(--gst-text-color, #ffffff) !important;
-  border: var(--gst-border, 1px solid rgba(255, 255, 255, 0.15)) !important;
+  border: var(--gst-border, 2px solid rgba(255, 255, 255, 0.15)) !important;
   border-radius: 8px !important;
   padding: 8px 12px !important;
-  display: inline-flex !important;
+  display: flex !important;
+  flex-direction: column !important;
   align-items: flex-start !important;
   justify-content: flex-start !important;
-  width: fit-content !important;
-  height: auto !important;
-  min-width: 180px !important;
-  max-width: 100% !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: inherit !important;
   box-sizing: border-box !important;
+  margin: 0 !important;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9) !important;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55) !important;
-  transition: background-color 0.2s ease, border-color 0.2s ease !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  transition: background-color 0.15s ease, backdrop-filter 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease !important;
   pointer-events: auto !important; /* Capture mouse events */
   cursor: move !important; /* Drag cursor indicates draggable container */
   white-space: pre-wrap !important;
-  word-break: break-word !important;
+  word-break: normal !important;
+  overflow-wrap: break-word !important;
   line-height: 1.4 !important;
 }
 
-/* Hover-to-fade effect for image translation */
+/* Hover-to-transparent effect for image translation overlay (no visibility:hidden to prevent flickering) */
 .gst-translation-block-inner:hover {
-  background: rgba(0, 0, 0, 0.05) !important;
-  border: 1px solid #8ab4f8 !important;
+  background: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: none !important;
+  border: 2px dashed #8ab4f8 !important;
+  border-radius: 8px !important;
+  outline: none !important;
+  box-sizing: border-box !important;
 }
 
-.gst-translation-block-inner span {
-  transition: opacity 0.2s ease !important;
-}
-
-.gst-translation-block-inner:hover span {
-  opacity: 0.05 !important;
+.gst-translation-block-inner:hover * {
+  opacity: 0 !important;
+  color: transparent !important;
 }
 

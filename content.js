@@ -175,6 +175,29 @@
     return true;
   });
 
+  // Helper to compute exact visual bounding rect of text selection, ignoring empty parent element margins
+  function getExactSelectionRect(selection) {
+    if (!selection || selection.rangeCount === 0) return { left: 0, top: 0, width: 0, height: 0 };
+    const range = selection.getRangeAt(0);
+    const clientRects = Array.from(range.getClientRects()).filter(r => r.width > 0 && r.height > 0);
+    
+    if (clientRects.length > 0) {
+      const minLeft = Math.min(...clientRects.map(r => r.left));
+      const maxRight = Math.max(...clientRects.map(r => r.right));
+      const minTop = Math.min(...clientRects.map(r => r.top));
+      const maxBottom = Math.max(...clientRects.map(r => r.bottom));
+      return {
+        left: minLeft,
+        top: minTop,
+        width: Math.max(maxRight - minLeft, 10),
+        height: Math.max(maxBottom - minTop, 10)
+      };
+    }
+    
+    const r = range.getBoundingClientRect();
+    return { left: r.left, top: r.top, width: r.width, height: r.height };
+  }
+
   // Helper function to trigger highlighted text translation
   function triggerTextTranslation(showErrorAlert = true) {
     if (isTranslating) return false;
@@ -183,8 +206,7 @@
     const selectedText = selection.toString().trim();
     if (selectedText.length > 0) {
       if (selection.rangeCount > 0) {
-        const range = selection.getRangeAt(0);
-        const rect = range.getBoundingClientRect();
+        const rect = getExactSelectionRect(selection);
         
         const context = {
           pageTitle: document.title,
@@ -607,117 +629,99 @@
       return;
     }
 
-    // Render each block exactly at its position or full selection card
-    data.translations.forEach(item => {
-      const box = (item.box_2d && Array.isArray(item.box_2d) && item.box_2d.length === 4) 
-        ? item.box_2d 
-        : [0, 0, 1000, 1000];
+    // Consolidate all translation items into a single unified block to prevent splitting into multiple overlapping popovers
+    let consolidatedText = data.translations
+      .map(t => (t.translated_text || '').trim())
+      .filter(Boolean)
+      .join('\n\n');
 
-      const ymin = box[0];
-      const xmin = box[1];
-      const ymax = box[2];
-      const xmax = box[3];
+    if (!consolidatedText.trim()) return;
 
-      // Convert from 0-1000 range to actual screen pixels relative to selection area
-      const origLeft = (xmin / 1000) * rect.w;
-      const origTop = (ymin / 1000) * rect.h;
-      const origWidth = ((xmax - xmin) / 1000) * rect.w;
-      const origHeight = ((ymax - ymin) / 1000) * rect.h;
-
-      // Use captured scroll offsets (at time of selection) - NOT live window.scrollX/Y
-      const boxLeft = pageScrollX + rect.x + origLeft;
-      const boxTop = pageScrollY + rect.y + origTop;
-      const boxWidth = Math.max(40, origWidth);
-      const boxHeight = origHeight;
-
-      const block = document.createElement('div');
-      block.className = 'gst-translation-block';
-      if (isText) {
-        block.classList.add('gst-text-block');
-      }
-      block.style.left = boxLeft + 'px';
-      block.style.top = boxTop + 'px';
-      
-      // Format translated text to join short vertical line breaks into natural sentences
-      let textVal = (item.translated_text || '').trim();
-      if (!isText && textVal.includes('\n')) {
-        const rawLines = textVal.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-        if (rawLines.length > 1) {
-          const avgLen = rawLines.reduce((sum, l) => sum + l.length, 0) / rawLines.length;
-          // If lines are short (average < 25 chars per line), merge into continuous sentence
-          if (avgLen < 25) {
-            textVal = rawLines.join(' ');
-          }
+    // Format text: join short vertical line breaks into natural paragraphs
+    if (!isText && consolidatedText.includes('\n')) {
+      const rawLines = consolidatedText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      if (rawLines.length > 1) {
+        const avgLen = rawLines.reduce((sum, l) => sum + l.length, 0) / rawLines.length;
+        if (avgLen < 25) {
+          consolidatedText = rawLines.join(' ');
         }
       }
+    }
 
-      // Auto width and compact fit around text content
-      block.style.width = 'fit-content';
-      block.style.minWidth = isText ? 'auto' : '200px';
-      block.style.maxWidth = Math.min(window.innerWidth - 60, Math.max(rect.w + 120, 360)) + 'px';
-      block.style.height = 'auto';
-      block.style.minHeight = 'auto';
+    const block = document.createElement('div');
+    block.className = 'gst-translation-block';
+    if (isText) {
+      block.classList.add('gst-text-block');
+    }
 
-      // Keep single-line translations on 1 continuous line without forced wrapping
-      if (isText || !textVal.includes('\n')) {
-        block.style.whiteSpace = 'nowrap';
-      } else {
-        block.style.whiteSpace = 'pre-wrap';
+    let currentWidth = 480;
+
+    if (isText) {
+      // Highlighted text selection mode: Set a comfortable reading width matching text selection
+      const selWidth = rect.w > 0 ? rect.w : 420;
+      const targetWidth = Math.min(Math.max(selWidth, 340), window.innerWidth - 40);
+      block.style.display = 'block';
+      block.style.width = targetWidth + 'px';
+      block.style.minWidth = '260px';
+      block.style.maxWidth = Math.min(window.innerWidth - 40, 650) + 'px';
+      block.style.minHeight = Math.max(rect.h, 28) + 'px';
+      block.style.whiteSpace = 'pre-wrap';
+      block.style.wordBreak = 'normal';
+      block.style.overflowWrap = 'break-word';
+      block.style.fontSize = '12.5px';
+      block.style.lineHeight = '1.45';
+      currentWidth = targetWidth;
+    } else {
+      // Screenshot crop mode: Match cropped box width and height exactly so border outline frames user's crop area
+      currentWidth = Math.max(rect.w, 60);
+      const currentHeight = Math.max(rect.h, 24);
+      block.style.width = currentWidth + 'px';
+      block.style.minHeight = currentHeight + 'px';
+      block.style.whiteSpace = 'pre-wrap';
+      block.style.wordBreak = 'normal';
+      block.style.overflowWrap = 'break-word';
+      block.style.fontSize = '12.5px';
+      block.style.lineHeight = '1.45';
+    }
+
+    // Position at top-left of selection rect
+    const boxLeft = pageScrollX + rect.x;
+    const boxTop = pageScrollY + rect.y;
+    const maxLeft = pageScrollX + window.innerWidth - currentWidth - 15;
+    const safeLeft = Math.max(pageScrollX + 10, Math.min(boxLeft, maxLeft));
+
+    block.style.left = safeLeft + 'px';
+    block.style.top = boxTop + 'px';
+    block.style.height = 'auto';
+
+    const textWrapper = document.createElement('span');
+    textWrapper.textContent = consolidatedText;
+
+    let dragHandle = block;
+    if (isText) {
+      block.appendChild(textWrapper);
+    } else {
+      const innerContainer = document.createElement('div');
+      innerContainer.className = 'gst-translation-block-inner';
+      innerContainer.appendChild(textWrapper);
+      block.appendChild(innerContainer);
+      dragHandle = innerContainer;
+    }
+
+    // Make it draggable
+    makeElementDraggable(block, dragHandle);
+
+    // Click to close ONLY this block
+    block.addEventListener('click', (e) => {
+      if (block.dataset.dragged === "true") {
+        block.dataset.dragged = "false";
+        return;
       }
-
-      // Calculate font size dynamically relative to text height
-      let fontSize = 13;
-      if (isText) {
-        fontSize = 13;
-      } else if (origHeight > 0) {
-        fontSize = Math.max(12, Math.min(origHeight * 0.7, 14));
-      }
-      block.style.fontSize = fontSize + 'px';
-
-      const textWrapper = document.createElement('span');
-      textWrapper.textContent = textVal;
-
-      let dragHandle = block;
-      if (isText) {
-        block.appendChild(textWrapper);
-      } else {
-        const innerContainer = document.createElement('div');
-        innerContainer.className = 'gst-translation-block-inner';
-        
-        if (isValidHexColor(item.background_color_hex)) {
-          innerContainer.style.setProperty('--gst-bg-color', item.background_color_hex);
-          innerContainer.style.setProperty('--gst-border', 'none');
-        }
-        if (isValidHexColor(item.text_color_hex)) {
-          innerContainer.style.setProperty('--gst-text-color', item.text_color_hex);
-        }
-
-        innerContainer.appendChild(textWrapper);
-        block.appendChild(innerContainer);
-        dragHandle = innerContainer;
-      }
-
-      // Make it draggable
-      makeElementDraggable(block, dragHandle);
-
-      // Click to close ONLY this block
-      block.addEventListener('click', (e) => {
-        // If block was dragged, do not close it
-        if (block.dataset.dragged === "true") {
-          block.dataset.dragged = "false";
-          return;
-        }
-
-        block.remove();
-
-        // If no more translation blocks left, remove container
-        if (translationContainer.querySelectorAll('.gst-translation-block').length === 0) {
-          clearTranslation();
-        }
-      });
-
-      translationContainer.appendChild(block);
+      block.remove();
+      clearTranslation();
     });
+
+    translationContainer.appendChild(block);
 
     // Close all translations when clicking anywhere OUTSIDE the translation blocks
     activeDocumentClickListener = (e) => {
@@ -908,8 +912,7 @@
         return;
       }
 
-      const curRange = selection.getRangeAt(0);
-      const curRect = curRange.getBoundingClientRect();
+      const curRect = getExactSelectionRect(selection);
       
       const context = {
         pageTitle: document.title,
@@ -982,8 +985,7 @@
 
       const selectedText = selection.toString().trim();
       if (selectedText.length > 0) {
-        const range = selection.getRangeAt(0);
-        const rect = range.getBoundingClientRect();
+        const rect = getExactSelectionRect(selection);
         if (rect.width > 0 || rect.height > 0) {
           showFloatingTranslateIcon(rect, selectedText);
         }
