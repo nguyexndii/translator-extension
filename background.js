@@ -533,15 +533,17 @@ async function executeGeminiImageTranslation(tabId, croppedBase64, rect, context
 - Website Domain: "${context.domain || ''}"
 - Page Title: "${context.pageTitle || ''}"` : '';
 
-  const prompt = `Dịch toàn bộ văn bản trong ảnh crop này sang ${targetLang}. Giữ nguyên tên riêng & thuật ngữ game/kỹ thuật.
+  const prompt = `Dịch toàn bộ văn bản trong ảnh crop này sang ${targetLang}.
 
-QUAN TRỌNG VỀ GOM NHÓM VĂN BẢN (TEXT GROUPING):
-- Nếu các dòng/câu chữ thuộc cùng một đoạn văn, bài viết, hoặc nằm nối tiếp nhau, HÃY GOM CHÚNG THÀNH 1 ITEM DUY NHẤT trong mảng "translations" thay vì chia lắt nhắt thành nhiều item.
-- Chỉ tách thành các item riêng biệt nếu chúng nằm ở các vị trí hoàn toàn xa nhau (ví dụ: 2 bong bóng thoại riêng biệt ở 2 góc khác nhau).
+QUY TẮC DỊCH CHẤT LƯỢNG CAO (HIGH QUALITY TRANSLATION):
+1. Dịch chuẩn xác, tự nhiên, đúng ngữ cảnh (Game UI, Web UI, Bài viết, Chat, hoặc Phụ đề phim).
+2. Giữ nguyên tên riêng, phím tắt, hằng số & thuật ngữ kỹ thuật/game.
+3. VỚI GIAO DIỆN (UI/Menu/Settings/Options): Tách từng nhãn nút, tiêu đề và tùy chọn (Option) thành các item riêng biệt với box_2d chính xác bao quanh đúng từng vị trí nút/tùy chọn đó.
+4. VỚI ĐOẠN VĂN/BÀI VIẾT/PHỤ ĐỀ VĂN BẢN: Gom các dòng/câu thuộc cùng 1 đoạn thành 1 item duy nhất với box_2d bao quanh đoạn văn đó.
 
 Trả về JSON ngắn gọn đúng schema:
 {
-  "context_type": "game" | "software_ui" | "web_article" | "chat" | "subtitle" | "other",
+  "context_type": "software_ui" | "game" | "web_article" | "chat" | "subtitle" | "other",
   "detected_source": "tên game/app/website nếu biết, hoặc null",
   "translations": [
     {

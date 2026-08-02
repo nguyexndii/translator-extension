@@ -852,8 +852,8 @@
     const rawItems = data.translations.filter(t => t.translated_text && t.translated_text.trim().length > 0);
     if (rawItems.length === 0) return false;
 
-    // Merge vertically adjacent & aligned text items into single consolidated boxes
-    const validItems = mergeAdjacentBoxes(rawItems);
+    // Merge vertically adjacent & aligned text items into single consolidated boxes (skip merging for software_ui/game UI menus)
+    const validItems = mergeAdjacentBoxes(rawItems, data.context_type);
 
     const scaleX = rect.w / 1000;
     const scaleY = rect.h / 1000;
@@ -929,8 +929,23 @@
     return renderedCount > 0;
   }
 
-  function mergeAdjacentBoxes(validItems) {
+  function mergeAdjacentBoxes(validItems, contextType) {
     if (!validItems || validItems.length <= 1) return validItems;
+
+    // DO NOT merge items if the content is identified as software UI menu or game UI options list
+    if (contextType === 'software_ui' || contextType === 'game') {
+      return validItems;
+    }
+
+    // Detect if items are distinct UI options (e.g. short 1-3 word labels in a vertical menu)
+    const isUIOptionList = validItems.length >= 3 && validItems.every(item => {
+      const wordCount = (item.original_text || '').trim().split(/\s+/).length;
+      return wordCount <= 3;
+    });
+
+    if (isUIOptionList) {
+      return validItems;
+    }
 
     const getBounds = (item) => {
       if (Array.isArray(item.box_2d) && item.box_2d.length === 4) {
@@ -951,12 +966,12 @@
       const [cYmin, cXmin, cYmax, cXmax] = getBounds(curr);
 
       const vDistance = cYmin - pYmax;
-      const isVerticallyClose = vDistance < 180;
+      const isVerticallyClose = vDistance < 90;
 
       const hOverlap = Math.max(0, Math.min(pXmax, cXmax) - Math.max(pXmin, cXmin));
       const pWidth = pXmax - pXmin;
       const cWidth = cXmax - cXmin;
-      const isHorizontallyAligned = (hOverlap > 0.2 * Math.min(pWidth, cWidth)) || (Math.abs(pXmin - cXmin) < 300);
+      const isHorizontallyAligned = (hOverlap > 0.35 * Math.min(pWidth, cWidth));
 
       if (isVerticallyClose && isHorizontallyAligned) {
         currentGroup.push(curr);
