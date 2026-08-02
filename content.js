@@ -453,19 +453,20 @@
 
     const dict = CONTENT_LOCALIZATION[currentUiLang] || CONTENT_LOCALIZATION.vi;
 
-    // Create instruction helper bar
-    helperBar = document.createElement('div');
-    helperBar.className = 'gst-helper-bar';
-    helperBar.innerHTML = `<span>${dict.helperText}</span> <span style="opacity: 0.6; font-size: 11px;">${dict.cancelText}</span>`;
-    appendToActiveContainer(helperBar);
-
-    // Create selection overlay
+    // 1. Create selection overlay FIRST
     selectionOverlay = document.createElement('div');
     selectionOverlay.className = 'gst-selection-overlay';
     
     const canvas = document.createElement('canvas');
     selectionOverlay.appendChild(canvas);
     appendToActiveContainer(selectionOverlay);
+
+    // 2. Create instruction helper bar SECOND (on top of selectionOverlay, locked to top center)
+    helperBar = document.createElement('div');
+    helperBar.className = 'gst-helper-bar';
+    helperBar.style.cssText = 'top: 16px !important; align-self: flex-start !important; position: fixed !important; left: 50% !important; transform: translateX(-50%) !important; z-index: 2147483648 !important;';
+    helperBar.innerHTML = `<span>${dict.helperText}</span> <span style="opacity: 0.6; font-size: 11px;">${dict.cancelText}</span>`;
+    appendToActiveContainer(helperBar);
 
     const dpr = window.devicePixelRatio || 1;
     const width = window.innerWidth || screen.width;

@@ -132,27 +132,30 @@
 
 
 
-/* Style for floating helper status bar during crop */
-.gst-helper-bar {
+/* Style for floating helper status bar during crop - locked to top center */
+.gst-helper-bar,
+:fullscreen .gst-helper-bar,
+:-webkit-full-screen .gst-helper-bar {
   position: fixed !important;
-  top: 14px !important;
+  top: 16px !important;
   bottom: auto !important;
   left: 50% !important;
   right: auto !important;
   transform: translateX(-50%) !important;
+  align-self: flex-start !important; /* CRITICAL: Prevents flexbox parent (video players) from centering vertically */
   margin: 0 !important;
-  background: rgba(15, 15, 20, 0.92) !important;
-  backdrop-filter: blur(12px) !important;
-  -webkit-backdrop-filter: blur(12px) !important;
+  background: rgba(15, 15, 20, 0.95) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
   color: #ffffff !important;
-  padding: 6px 16px !important;
+  padding: 6px 18px !important;
   border-radius: 20px !important;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
-  font-size: 12.5px !important;
+  font-size: 13px !important;
   font-weight: 500 !important;
-  z-index: 2147483648 !important;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5) !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  z-index: 2147483648 !important; /* CRITICAL: Must be above selectionOverlay (2147483647) */
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
   pointer-events: none !important;
   display: flex !important;
   flex-direction: row !important;

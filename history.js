@@ -637,4 +637,32 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+
+  // Back to Top button scroll handler
+  const btnBackToTop = document.getElementById('btnBackToTop');
+  if (btnBackToTop) {
+    const handleScroll = () => {
+      const scrollY = window.pageYOffset || window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+      if (scrollY > 100) {
+        btnBackToTop.classList.add('visible');
+      } else {
+        btnBackToTop.classList.remove('visible');
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    document.addEventListener('scroll', handleScroll, { passive: true });
+
+    // Initial check in case page starts scrolled
+    handleScroll();
+
+    btnBackToTop.addEventListener('click', () => {
+      window.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+      });
+      if (document.documentElement) document.documentElement.scrollTo({ top: 0, behavior: 'smooth' });
+      if (document.body) document.body.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  }
 });
