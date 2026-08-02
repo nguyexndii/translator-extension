@@ -369,10 +369,12 @@ document.addEventListener('DOMContentLoaded', () => {
           transHtml += `<div class="history-line-segment" data-index="${i}">${escapeHtml(transText) || '&nbsp;'}</div>`;
         }
 
+        const sourceBadgeHtml = item.detectedSource ? `<span class="history-item-badge" style="font-size:10.5px; background:rgba(138,180,248,0.15); color:#8ab4f8; padding:2px 6px; border-radius:4px; margin-left:6px; font-weight:500;">${escapeHtml(item.detectedSource)}</span>` : '';
+
         itemEl.innerHTML = `
           <div class="history-item-header">
             <div class="history-item-meta">
-              <span class="history-item-langs">${srcFull} ➔ ${tgtFull}</span>
+              <span class="history-item-langs">${srcFull} ➔ ${tgtFull}${sourceBadgeHtml}</span>
               <span class="history-item-time">${formattedTime}</span>
             </div>
             <div class="history-item-actions">

@@ -3,34 +3,59 @@ const GEMINI_MODELS = [
   'gemini-3.1-flash-lite'
 ];
 
-function buildMasterTranslationPrompt(text, targetLang, context = null) {
-  const contextStr = context ? `\n\nWEBPAGE SOURCE CONTEXT:
-- Domain: "${context.domain || ''}"
-- Page Title: "${context.pageTitle || ''}"` : '';
+// Glossary Cache Helper Functions
+async function getGlossaryEntry(key) {
+  if (!key) return null;
+  const storage = await new Promise((resolve) => {
+    chrome.storage.local.get(['glossaryCache'], (result) => resolve(result));
+  });
+  const cache = storage.glossaryCache || {};
+  return cache[key] || null;
+}
 
-  return `You are a world-class expert translator specializing in natural, fluent, and highly polished translations into ${targetLang}.
+async function updateGlossaryEntry(key, detectedSource, newTerms) {
+  if (!key || !newTerms || newTerms.length === 0) return;
+  const storage = await new Promise((resolve) => {
+    chrome.storage.local.get(['glossaryCache'], (result) => resolve(result));
+  });
+  const cache = storage.glossaryCache || {};
+  const entry = cache[key] || { detectedSource: detectedSource || null, terms: {}, updatedAt: 0 };
+  newTerms.forEach((t) => {
+    if (t && typeof t === 'string' && t.trim()) {
+      entry.terms[t.trim()] = entry.terms[t.trim()] || 'giữ nguyên';
+    }
+  });
+  if (detectedSource) {
+    entry.detectedSource = detectedSource;
+  }
+  entry.updatedAt = Date.now();
+  // Giới hạn 50 term gần nhất để tránh phình prompt
+  const termKeys = Object.keys(entry.terms);
+  if (termKeys.length > 50) {
+    termKeys.slice(0, termKeys.length - 50).forEach((k) => delete entry.terms[k]);
+  }
+  // Cân nhắc giới hạn tổng số entry trong cache (VD: 100 domain gần nhất)
+  const entryKeys = Object.keys(cache);
+  if (entryKeys.length > 100) {
+    const sortedKeys = entryKeys.sort((a, b) => (cache[a].updatedAt || 0) - (cache[b].updatedAt || 0));
+    sortedKeys.slice(0, sortedKeys.length - 100).forEach((k) => delete cache[k]);
+  }
+  cache[key] = entry;
+  chrome.storage.local.set({ glossaryCache: cache });
+}
 
-CRITICAL TRANSLATION QUALITY INSTRUCTIONS:
-1. NATURAL & FLUENT PHRASING (VĂN PHONG MƯỢT MÀ, TỰ NHIÊN):
-   - Translate with natural native fluency. Avoid stiff, literal, or robotic word-for-word translations.
-   - Express ideas smoothly as a professional native speaker of ${targetLang} would naturally write.
-2. STRICT PUNCTUATION & SYMBOL PRESERVATION:
-   - Preserve ALL numbers, units, bullet points, hyphens, and middle dot separators '·' (e.g. '250.730 biên tập viên tích cực · 7.217.784 bài viết bằng tiếng Anh').
-   - NEVER drop middle dots '·' or structural separators between statistics, items, or numbers.
-3. CONTEXT & DOMAIN ADAPTATION:
-   - GAMING/ESPORTS: "flash" = "quả mù" / "chiêu mù" / "flash" (NOT "lướt"). "dash" = "lướt". "ult"/"ultimate" = "chiêu cuối". Keep hero/champion/item names natural.
-   - TECH/PROGRAMMING: Keep code syntax, API endpoints, variable names, and function signatures intact.
-   - IDIOMS & SLANG: Translate the true figurative meaning naturally into everyday expressions.
-4. FORMATTING: Preserve exact paragraph structures, line breaks, lists, and whitespace layout.
+function buildGlossaryPrompt(entry) {
+  if (!entry || !entry.terms || Object.keys(entry.terms).length === 0) return '';
+  const lines = Object.entries(entry.terms).map(([term, note]) => `- "${term}": ${note}`).join('\n');
+  const srcName = entry.detectedSource ? ` cho nguồn "${entry.detectedSource}"` : '';
+  return `\n\nTHUẬT NGỮ ĐÃ DÙNG TRƯỚC ĐÓ${srcName} (giữ nhất quán, đừng đổi cách dịch/giữ):\n${lines}`;
+}
 
-Return JSON schema:
-{
-  "detected_source_language": "Language Name",
-  "translated_text": "translated text"
-}${contextStr}
-
-INPUT TEXT TO TRANSLATE:
-${text}`;
+async function getLastPopupSourceKey() {
+  const storage = await new Promise((resolve) => {
+    chrome.storage.local.get(['lastPopupSource'], (result) => resolve(result));
+  });
+  return storage.lastPopupSource || null;
 }
 
 function getGeminiModelUrl(apiKey, modelName = GEMINI_MODELS[0]) {
@@ -250,12 +275,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.action === 'translate-text-popup') {
-    handleTextTranslationFromPopup(message.text, message.targetLang, sendResponse);
+    handleTextTranslationFromPopup(message.text, message.targetLang, message.domain || null, sendResponse);
     return true;
   }
 
   if (message.action === 'translate-image-popup') {
-    handleImageTranslationFromPopup(message.base64Data, message.targetLang, sendResponse);
+    handleImageTranslationFromPopup(message.base64Data, message.targetLang, message.domain || null, sendResponse);
     return true;
   }
 
@@ -481,33 +506,51 @@ async function executeGeminiImageTranslation(tabId, croppedBase64, rect, context
   // Strip prefix "data:image/jpeg;base64," to get raw base64 data
   const base64ImageBytes = croppedBase64.split(',')[1];
 
+  const key = (context && context.domain) ? context.domain : await getLastPopupSourceKey();
+  const glossaryEntry = await getGlossaryEntry(key);
+  const glossaryPrompt = buildGlossaryPrompt(glossaryEntry);
+
   const contextPrompt = context ? `\n\nWebpage context:
 - Website Domain: "${context.domain || ''}"
-- Page Title: "${context.pageTitle || ''}"
-Use this context to accurately translate character/object names, coding terms, slang, or media elements. If there are technical codes or special gaming terms, keep them in standard formats.` : '';
+- Page Title: "${context.pageTitle || ''}"` : '';
 
-  // Construct ultra-fast request payload with gaming & slang context
-  const prompt = `Identify and translate all visible text in this image to ${targetLang}.
+  const prompt = `Bạn là công cụ dịch màn hình. Đây là ảnh chụp một vùng màn hình được người dùng khoanh chọn (crop). Hãy xác định TẤT CẢ text trong ảnh và dịch sang ${targetLang}.
 
-CRITICAL TRANSLATION QUALITY INSTRUCTIONS:
-- Translate accurately into smooth, elegant, and natural native ${targetLang}. Avoid literal or awkward translations.
-- PRESERVE SYMBOLS & SEPARATORS: Maintain all numbers, units, bullet points, hyphens, and middle dot separators '·' (e.g., '250.730 biên tập viên tích cực · 7.217.784 bài viết bằng tiếng Anh'). NEVER delete middle dots '·' or punctuation between statistical metrics or list items.
-- GAMING & TECH TERMINOLOGY:
-  * "flash" = flashbang/blind ability ("quả mù", "chiêu mù", or "flash"), NOT "lướt" (dash).
-  * "dash" = mobility skills ("lướt").
-  * Keep character/item/skill names in standard gaming/tech terminology.
-- Output clean, continuous natural sentences and preserve paragraph structures.
+BƯỚC 1 — Xác định ngữ cảnh trước khi dịch:
+Dựa vào metadata trang web bên dưới VÀ các dấu hiệu hình ảnh (HUD, thanh máu, icon vật phẩm, khung hội thoại, bố cục menu đặc trưng của game...), xác định đây là: game, phần mềm/UI, bài viết web, đoạn chat, phụ đề video, hay loại khác. Nếu nhận ra tên game/app/website cụ thể, ghi vào detected_source.
 
-Return JSON matching schema:
+BƯỚC 2 — Nếu là GAME hoặc UI dạng game:
+- Giữ nguyên tên riêng: tên nhân vật, tên NPC, tên bản đồ/địa danh, tên phe/guild.
+- Giữ nguyên thuật ngữ hệ thống: tên skill/chiêu thức, tên item/trang bị, tên currency trong game, tên chỉ số — TRỪ KHI game này đã có bản Việt hóa chính thức phổ biến, khi đó dùng đúng tên Việt hóa đó.
+- Giữ nguyên các từ mượn đã quen thuộc với cộng đồng game Việt (boss, combo, build, gacha, banner, farm, buff, nerf...) thay vì dịch cưỡng ép.
+- Hội thoại/cốt truyện: dịch tự nhiên, giữ đúng giọng điệu nhân vật.
+
+BƯỚC 3 — Nếu KHÔNG phải game (bài viết, UI phần mềm thường, chat, tài liệu...):
+- Dịch tự nhiên, đúng nghĩa. Chỉ giữ nguyên nhãn UI khi dịch ra sẽ gây khó hiểu hoặc sai ngữ cảnh kỹ thuật.
+
+BƯỚC 4 — Nếu câu bị cắt cụt do vùng chụp giới hạn:
+- Chỉ dịch phần nhìn thấy được. TUYỆT ĐỐI không đoán/bịa phần bị cắt mất.
+
+Trả về JSON đúng schema sau, KHÔNG thêm text nào khác:
 {
-  "detected_source_language": "Language Name",
+  "context_type": "game" | "software_ui" | "web_article" | "chat" | "subtitle" | "document" | "other",
+  "detected_source": "tên game/app/website cụ thể nếu nhận ra, hoặc null",
+  "detected_source_language": "tên ngôn ngữ gốc bằng tiếng Anh (VD: English, Japanese, French...)",
   "translations": [
     {
-      "original_text": "original text",
-      "translated_text": "translated text"
+      "box_2d": [ymin, xmin, ymax, xmax],
+      "original_text": "text gốc",
+      "translated_text": "text đã dịch",
+      "kept_terms": ["các thuật ngữ giữ nguyên trong block này, nếu có"],
+      "background_color_hex": "mã màu nền vùng chữ, VD #FFFFFF",
+      "text_color_hex": "mã màu chữ gốc, VD #000000"
     }
   ]
-}${contextPrompt}`;
+}
+Ghi chú:
+- box_2d là số nguyên chuẩn hóa 0-1000 theo [ymin, xmin, ymax, xmax] của ảnh crop này.
+- original_text giữ nguyên văn text gốc.
+- background_color_hex/text_color_hex phân tích trực tiếp từ ảnh cho từng block.${contextPrompt}${glossaryPrompt}`;
 
   const payload = {
     contents: [
@@ -535,12 +578,18 @@ Return JSON matching schema:
   let errorMsgs = [];
 
   for (let i = 0; i < apiKeys.length; i++) {
-    const key = apiKeys[i];
-    if (!key) continue;
+    const keyItem = apiKeys[i];
+    if (!keyItem) continue;
 
     try {
-      const data = await callGeminiApiWithFallback(key, payload, signal);
+      const data = await callGeminiApiWithFallback(keyItem, payload, signal);
       data.target_language = targetLang;
+
+      const allKeptTerms = (data.translations || []).flatMap(t => t.kept_terms || []);
+      if (data.detected_source) {
+        chrome.storage.local.set({ lastPopupSource: data.detected_source });
+      }
+      await updateGlossaryEntry(key || data.detected_source, data.detected_source, allKeptTerms);
 
       // Add to translation history by combining all detected text blocks
       if (data && data.translations && data.translations.length > 0) {
@@ -548,7 +597,7 @@ Return JSON matching schema:
         const combinedTranslated = data.translations.map(t => t.translated_text).filter(Boolean).join('\n');
         const detectedSourceLang = data.detected_source_language || 'Auto';
         if (combinedOriginal.trim() && combinedTranslated.trim()) {
-          addToHistory(combinedOriginal, combinedTranslated, detectedSourceLang, targetLang);
+          addToHistory(combinedOriginal, combinedTranslated, detectedSourceLang, targetLang, data.context_type, data.detected_source);
         }
       }
 
@@ -601,7 +650,29 @@ async function handleTextSelectionAndTranslation(tabId, selectedText, rect, cont
       return;
     }
 
-    const prompt = buildMasterTranslationPrompt(selectedText, targetLang, context);
+    const key = (context && context.domain) ? context.domain : await getLastPopupSourceKey();
+    const glossaryEntry = await getGlossaryEntry(key);
+    const glossaryPrompt = buildGlossaryPrompt(glossaryEntry);
+
+    const contextPrompt = context ? `\n\nWebpage context:
+- Website Domain: "${context.domain || ''}"
+- Page Title: "${context.pageTitle || ''}"` : '';
+
+    const prompt = `Dịch đoạn text được bôi đen dưới đây sang ${targetLang}. Giữ nguyên cấu trúc đoạn văn, xuống dòng và khoảng trắng của bản gốc.
+
+Trước khi dịch, xác định ngữ cảnh dựa trên metadata trang web (domain, tiêu đề trang) và nội dung của chính đoạn text: đây là bài viết, UI phần mềm, đoạn chat, hội thoại/cốt truyện game, hay loại khác. Nếu nội dung thuộc về 1 game/app cụ thể mà bạn nhận ra tên, ghi vào detected_source.
+
+Nếu là nội dung game: giữ nguyên tên riêng (nhân vật, địa danh), thuật ngữ hệ thống (skill, item, currency trong game) và các từ mượn quen thuộc với cộng đồng (boss, combo, gacha...) — trừ khi có bản Việt hóa chính thức phổ biến.
+
+Trả về JSON đúng schema, không thêm text khác:
+{
+  "context_type": "game" | "software_ui" | "web_article" | "chat" | "subtitle" | "document" | "other",
+  "detected_source": "tên game/app/website cụ thể nếu nhận ra, hoặc null",
+  "detected_source_language": "tên ngôn ngữ gốc bằng tiếng Anh",
+  "translated_text": "text đã dịch",
+  "kept_terms": ["các thuật ngữ giữ nguyên, nếu có"]
+}
+Input text:\n\n${selectedText}${contextPrompt}${glossaryPrompt}`;
 
     const payload = {
       contents: [
@@ -622,26 +693,34 @@ async function handleTextSelectionAndTranslation(tabId, selectedText, rect, cont
     let errorMsgs = [];
 
     for (let i = 0; i < apiKeys.length; i++) {
-      const key = apiKeys[i];
-      if (!key) continue;
+      const keyItem = apiKeys[i];
+      if (!keyItem) continue;
 
       try {
-        const data = await callGeminiApiWithFallback(key, payload, signal);
+        const data = await callGeminiApiWithFallback(keyItem, payload, signal);
         const translatedText = data.translated_text || '';
         const detectedSourceLang = data.detected_source_language || 'Auto';
 
         if (selectedText.trim() && translatedText.trim()) {
-          addToHistory(selectedText, translatedText, detectedSourceLang, targetLang);
+          addToHistory(selectedText, translatedText, detectedSourceLang, targetLang, data.context_type, data.detected_source);
         }
 
+        if (data.detected_source) {
+          chrome.storage.local.set({ lastPopupSource: data.detected_source });
+        }
+        await updateGlossaryEntry(key || data.detected_source, data.detected_source, data.kept_terms || []);
+
         const structuredData = {
+          context_type: data.context_type,
+          detected_source: data.detected_source,
           detected_source_language: detectedSourceLang,
           target_language: targetLang,
           translations: [
             {
               box_2d: [0, 0, 1000, 1000],
               original_text: selectedText,
-              translated_text: translatedText
+              translated_text: translatedText,
+              kept_terms: data.kept_terms || []
             }
           ]
         };
@@ -772,8 +851,8 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   }
 });
 
-// Helper to save translations to local storage (max 50, FIFO, no duplicate consecutive entries)
-function addToHistory(original, translated, sourceLang, targetLang) {
+// Helper to save translations to local storage (max 100, FIFO, no duplicate consecutive entries)
+function addToHistory(original, translated, sourceLang, targetLang, contextType = null, detectedSource = null) {
   if (!original || !translated) return;
   const originalClean = original.trim();
   const translatedClean = translated.trim();
@@ -795,10 +874,13 @@ function addToHistory(original, translated, sourceLang, targetLang) {
       translated: translatedClean,
       sourceLang: sourceLang || 'Auto',
       targetLang: targetLang || 'Vietnamese',
+      contextType: contextType || null,
+      detectedSource: detectedSource || null,
       timestamp: Date.now()
     };
     
     history.unshift(newItem);
+    if (history.length > 100) history = history.slice(0, 100);
     chrome.storage.local.set({ translationHistory: history });
   });
 }
@@ -829,7 +911,7 @@ function addQrToHistory(type, content) {
 }
 
 // Background handler for plain text translation from popup
-async function handleTextTranslationFromPopup(rawText, targetLang, sendResponse) {
+async function handleTextTranslationFromPopup(rawText, targetLang, popupDomain, sendResponse) {
   try {
     const storage = await new Promise((resolve) => {
       chrome.storage.local.get(['apiKeys', 'uiLang'], (result) => {
@@ -848,7 +930,25 @@ async function handleTextTranslationFromPopup(rawText, targetLang, sendResponse)
       return;
     }
 
-    const prompt = buildMasterTranslationPrompt(rawText, targetLang, null);
+    const key = popupDomain || await getLastPopupSourceKey();
+    const glossaryEntry = await getGlossaryEntry(key);
+    const glossaryPrompt = buildGlossaryPrompt(glossaryEntry);
+
+    const prompt = `Dịch đoạn text sau sang ${targetLang}. Giữ nguyên cấu trúc đoạn văn, xuống dòng và khoảng trắng của bản gốc.
+
+Xác định ngữ cảnh nội dung dựa trên chính văn bản: đây là bài viết, UI phần mềm, đoạn chat, hội thoại/cốt truyện game hay loại khác. Nếu nhận ra đây là nội dung từ 1 game/app cụ thể, ghi vào detected_source.
+
+Nếu là nội dung game: giữ nguyên tên riêng, thuật ngữ hệ thống (skill, item, currency) và từ mượn quen thuộc cộng đồng — trừ khi có bản Việt hóa chính thức phổ biến.
+
+Trả về JSON đúng schema, không thêm text khác:
+{
+  "context_type": "game" | "software_ui" | "web_article" | "chat" | "subtitle" | "document" | "other",
+  "detected_source": "tên game/app cụ thể nếu nhận ra, hoặc null",
+  "detected_source_language": "tên ngôn ngữ gốc bằng tiếng Anh",
+  "translated_text": "text đã dịch",
+  "kept_terms": ["các thuật ngữ giữ nguyên, nếu có"]
+}
+Input text:\n\n${rawText}${glossaryPrompt}`;
 
     const payload = {
       contents: [
@@ -871,16 +971,30 @@ async function handleTextTranslationFromPopup(rawText, targetLang, sendResponse)
     let detectedSource = 'Auto';
 
     for (let i = 0; i < apiKeys.length; i++) {
-      const key = apiKeys[i];
-      if (!key) continue;
+      const keyItem = apiKeys[i];
+      if (!keyItem) continue;
 
       try {
-        const resJson = await callGeminiApiWithFallback(key, payload, null);
+        const resJson = await callGeminiApiWithFallback(keyItem, payload, null);
         translated = resJson.translated_text || '';
         detectedSource = resJson.detected_source_language || 'Auto';
 
-        addToHistory(rawText, translated, detectedSource, targetLang);
+        addToHistory(rawText, translated, detectedSource, targetLang, resJson.context_type, resJson.detected_source);
+
+        if (resJson.detected_source) {
+          chrome.storage.local.set({ lastPopupSource: resJson.detected_source });
+        }
+        await updateGlossaryEntry(key || resJson.detected_source, resJson.detected_source, resJson.kept_terms || []);
+
         apiCallSuccess = true;
+        sendResponse({
+          success: true,
+          translatedText: translated,
+          detectedSource: detectedSource,
+          contextType: resJson.context_type || null,
+          detectedAppSource: resJson.detected_source || null,
+          keptTerms: resJson.kept_terms || []
+        });
         break;
       } catch (err) {
         console.warn(`API Key index ${i} failed in background popup handler:`, err);
@@ -888,9 +1002,7 @@ async function handleTextTranslationFromPopup(rawText, targetLang, sendResponse)
       }
     }
 
-    if (apiCallSuccess) {
-      sendResponse({ success: true, translatedText: translated, detectedSource: detectedSource });
-    } else {
+    if (!apiCallSuccess) {
       sendResponse({ success: false, error: `API error / Lỗi API:\n${errorsCollected.join('\n')}` });
     }
   } catch (err) {
@@ -898,7 +1010,7 @@ async function handleTextTranslationFromPopup(rawText, targetLang, sendResponse)
   }
 }
 
-async function handleImageTranslationFromPopup(base64Data, targetLang, sendResponse) {
+async function handleImageTranslationFromPopup(base64Data, targetLang, popupDomain, sendResponse) {
   try {
     const storage = await new Promise((resolve) => {
       chrome.storage.local.get(['apiKeys', 'uiLang'], (result) => {
@@ -920,20 +1032,31 @@ async function handleImageTranslationFromPopup(base64Data, targetLang, sendRespo
     const base64ImageBytes = base64Data.split(',')[1];
     const mimeType = base64Data.split(',')[0].split(':')[1].split(';')[0] || 'image/jpeg';
 
-    const prompt = `Identify and translate only actual written text characters visible in this image into ${targetLang}.
-CRITICAL TRANSLATION QUALITY INSTRUCTIONS:
-- Translate into smooth, highly natural, and polished native ${targetLang}. Avoid stiff or awkward word-for-word translations.
-- PRESERVE NUMBERS & SYMBOLS: Maintain all numbers, units, bullet points, hyphens, and middle dot separators '·' (e.g. '250.730 biên tập viên tích cực · 7.217.784 bài viết bằng tiếng Anh'). NEVER delete middle dots '·' or separators between stats or items.
-- Do NOT guess, describe, or hallucinate text.
-- Do NOT decode, translate, or describe QR codes, barcodes, icons, logos, or visual patterns. A QR code is NOT written text characters.
-- If there are no actual written text characters (letters, numbers, sentences) in the image, you MUST return empty strings "" for both "original_text" and "translated_text".
+    const key = popupDomain || await getLastPopupSourceKey();
+    const glossaryEntry = await getGlossaryEntry(key);
+    const glossaryPrompt = buildGlossaryPrompt(glossaryEntry);
 
-Return a JSON object matching this schema:
+    const prompt = `Xác định các ký tự chữ viết thực sự xuất hiện trong ảnh này và dịch sang ${targetLang}.
+
+QUY TẮC BẮT BUỘC:
+- KHÔNG đoán, mô tả, hoặc bịa ra text không có thật.
+- KHÔNG decode/dịch/mô tả mã QR, barcode, icon, logo hay hoạ tiết hình ảnh. Mã QR KHÔNG phải là text chữ viết.
+- Nếu ảnh không có ký tự chữ viết thực sự nào (chữ cái, số, câu), PHẢI trả về chuỗi rỗng "" cho cả "original_text" và "translated_text".
+- Không tự bịa text dựa theo suy đoán ngữ cảnh (VD: thấy mã QR không có nghĩa là có chữ "Scan QR code").
+
+Trước khi dịch, xác định ngữ cảnh dựa trên dấu hiệu hình ảnh (HUD, thanh máu, icon vật phẩm, khung hội thoại, bố cục menu, font chữ, logo phần mềm...): đây là game, phần mềm/UI, bài viết, đoạn chat, phụ đề, hay loại khác. Nếu nhận ra tên game/app cụ thể, ghi vào detected_source.
+
+Nếu là nội dung game: giữ nguyên tên riêng, thuật ngữ hệ thống (skill, item, currency), từ mượn quen thuộc cộng đồng (boss, combo, gacha...) — trừ khi có bản Việt hóa chính thức phổ biến.
+
+Trả về JSON đúng schema, không thêm text khác:
 {
-  "detected_source_language": "detected source language name in English (e.g., English, Japanese, French, etc.)",
-  "original_text": "all identified original text from the image, formatted with appropriate line breaks",
-  "translated_text": "the translated text, preserving the same line breaks and paragraph structure"
-}`;
+  "context_type": "game" | "software_ui" | "web_article" | "chat" | "subtitle" | "document" | "other",
+  "detected_source": "tên game/app cụ thể nếu nhận ra, hoặc null",
+  "detected_source_language": "tên ngôn ngữ gốc bằng tiếng Anh",
+  "original_text": "toàn bộ text gốc nhận diện được, giữ xuống dòng phù hợp",
+  "translated_text": "text đã dịch, giữ cùng cấu trúc xuống dòng",
+  "kept_terms": ["các thuật ngữ giữ nguyên, nếu có"]
+}${glossaryPrompt}`;
 
     const payload = {
       contents: [
@@ -963,21 +1086,36 @@ Return a JSON object matching this schema:
     let detectedSource = 'Auto';
 
     for (let i = 0; i < apiKeys.length; i++) {
-      const key = apiKeys[i];
-      if (!key) continue;
+      const keyItem = apiKeys[i];
+      if (!keyItem) continue;
 
       try {
-        const resJson = await callGeminiApiWithFallback(key, payload, null);
+        const resJson = await callGeminiApiWithFallback(keyItem, payload, null);
         translated = resJson.translated_text || '';
         original = resJson.original_text || '';
         detectedSource = resJson.detected_source_language || 'Auto';
 
         if (original.trim() && translated.trim()) {
-          addToHistory(original, translated, detectedSource, targetLang);
+          addToHistory(original, translated, detectedSource, targetLang, resJson.context_type, resJson.detected_source);
         } else if (translated.trim()) {
-          addToHistory('Image Translation', translated, detectedSource, targetLang);
+          addToHistory('Image Translation', translated, detectedSource, targetLang, resJson.context_type, resJson.detected_source);
         }
+
+        if (resJson.detected_source) {
+          chrome.storage.local.set({ lastPopupSource: resJson.detected_source });
+        }
+        await updateGlossaryEntry(key || resJson.detected_source, resJson.detected_source, resJson.kept_terms || []);
+
         apiCallSuccess = true;
+        sendResponse({
+          success: true,
+          translatedText: translated,
+          originalText: original,
+          detectedSource: detectedSource,
+          contextType: resJson.context_type || null,
+          detectedAppSource: resJson.detected_source || null,
+          keptTerms: resJson.kept_terms || []
+        });
         break;
       } catch (err) {
         console.warn(`API Key index ${i} failed in background image popup handler:`, err);
