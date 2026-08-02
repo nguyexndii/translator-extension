@@ -19,11 +19,114 @@
   let translationContainer = null;
   let currentUiLang = 'en'; // default UI language
   let isTranslating = false;
+  let autoPausedVideos = [];
+  let preventReplayListeners = [];
+
+  function pauseAllPlayingVideos() {
+    autoPausedVideos = [];
+    preventReplayListeners = [];
+
+    function scanAndPause(root) {
+      if (!root) return;
+      try {
+        const vids = root.querySelectorAll ? Array.from(root.querySelectorAll('video')) : [];
+        vids.forEach(v => {
+          if (!v.paused && !v.ended) {
+            try {
+              v.pause();
+              autoPausedVideos.push(v);
+            } catch (e) {}
+          }
+
+          // Intercept any forced replay attempts by site JS while selection/translation is active
+          const preventReplay = (e) => {
+            if (isTranslating || selectionOverlay) {
+              e.preventDefault();
+              e.stopPropagation();
+              if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+              try { v.pause(); } catch (err) {}
+            }
+          };
+
+          try {
+            v.addEventListener('play', preventReplay, true);
+            v.addEventListener('playing', preventReplay, true);
+            preventReplayListeners.push({ video: v, listener: preventReplay });
+          } catch (err) {}
+        });
+
+        const allEls = root.querySelectorAll ? Array.from(root.querySelectorAll('*')) : [];
+        allEls.forEach(el => {
+          if (el.shadowRoot) scanAndPause(el.shadowRoot);
+        });
+      } catch (err) {}
+    }
+    scanAndPause(document);
+  }
+
+  function resumeAutoPausedVideo() {
+    // Remove replay prevention listeners
+    preventReplayListeners.forEach(item => {
+      try {
+        item.video.removeEventListener('play', item.listener, true);
+        item.video.removeEventListener('playing', item.listener, true);
+      } catch (e) {}
+    });
+    preventReplayListeners = [];
+
+    if (Array.isArray(autoPausedVideos) && autoPausedVideos.length > 0) {
+      autoPausedVideos.forEach(v => {
+        try {
+          v.play().catch(() => {});
+        } catch (e) {}
+      });
+      autoPausedVideos = [];
+    }
+  }
+
+  // Robustly append overlay to active container (handles HTML5 Fullscreen mode and windowed mode)
+  function appendToActiveContainer(el) {
+    if (!el) return;
+    const fsEl = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+    if (fsEl) {
+      const container = (fsEl.tagName === 'VIDEO' && fsEl.parentElement) ? fsEl.parentElement : fsEl;
+      try {
+        if (window.getComputedStyle(container).position === 'static') {
+          container.style.position = 'relative';
+        }
+      } catch (e) {}
+      container.appendChild(el);
+    } else {
+      (document.body || document.documentElement).appendChild(el);
+    }
+  }
+
+  function removeFromActiveContainer(el) {
+    if (el) {
+      try { el.remove(); } catch (e) {}
+    }
+  }
+
+  // Get active container, support fullscreen mode (e.g. YouTube, Netflix, HTML5 Video players)
+  function getActiveContainer() {
+    const fs = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+    if (fs) {
+      const container = (fs.tagName === 'VIDEO' && fs.parentElement) ? fs.parentElement : fs;
+      try {
+        const compPos = window.getComputedStyle(container).position;
+        if (compPos === 'static') {
+          container.style.position = 'relative';
+        }
+      } catch (e) {}
+      return container;
+    }
+    return document.body || document.documentElement;
+  }
 
   const CONTENT_LOCALIZATION = {
     vi: {
       helperText: 'Kéo chuột để chọn vùng màn hình cần dịch',
-      cancelText: '(ESC để hủy)',
+      cancelText: '(ESC hoặc Chuột phải để hủy)',
       alertNoHighlight: 'Vui lòng bôi đen văn bản trên trang web trước khi dịch!',
       noTextFound: 'Không tìm thấy chữ nào.',
       closeAllTooltip: 'Đóng tất cả bản dịch',
@@ -36,7 +139,7 @@
     },
     en: {
       helperText: 'Drag mouse to select screen region to translate',
-      cancelText: '(ESC to cancel)',
+      cancelText: '(ESC or Right-click to cancel)',
       alertNoHighlight: 'Please highlight text on the webpage before translating!',
       noTextFound: 'No text found.',
       closeAllTooltip: 'Close all translations',
@@ -106,14 +209,20 @@
     return langName.charAt(0).toUpperCase() + langName.slice(1);
   }
 
-  // Get active container, support fullscreen mode
-  // If the fullscreen element is a replaced element like VIDEO, use its parent element instead.
+  // Get active container, support fullscreen mode (e.g. YouTube, Netflix, HTML5 Video players)
   function getActiveContainer() {
-    const fs = document.fullscreenElement || document.webkitFullscreenElement || document.body;
-    if (fs && fs.tagName === 'VIDEO') {
-      return fs.parentElement || document.body;
+    const fs = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+    if (fs) {
+      const container = (fs.tagName === 'VIDEO' && fs.parentElement) ? fs.parentElement : fs;
+      try {
+        const compPos = window.getComputedStyle(container).position;
+        if (compPos === 'static') {
+          container.style.position = 'relative';
+        }
+      } catch (e) {}
+      return container;
     }
-    return fs || document.body;
+    return document.body || document.documentElement;
   }
 
   // Listen for messages from background script
@@ -123,11 +232,37 @@
       currentUiLang = message.uiLang;
     }
 
-    const dict = CONTENT_LOCALIZATION[currentUiLang] || CONTENT_LOCALIZATION.vi;
     const isTopFrame = (window === window.top);
+    const hasLocalFs = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement);
+    const shouldHandleInThisFrame = isTopFrame || hasLocalFs;
+
+    if (message.action === 'pause-video') {
+      pauseAllPlayingVideos();
+      sendResponse({ status: 'video-paused' });
+      return true;
+    } else if (message.action === 'resume-video') {
+      resumeAutoPausedVideo();
+      sendResponse({ status: 'video-resumed' });
+      return true;
+    }
 
     if (message.action === 'trigger-selection' || message.action === 'trigger-translation') {
-      if (!isTopFrame) return;
+      if (isTopFrame && !hasLocalFs) {
+        let iframeInFs = false;
+        try {
+          const iframes = document.querySelectorAll('iframe');
+          for (const frame of iframes) {
+            if (frame === document.fullscreenElement || frame === document.webkitFullscreenElement) {
+              iframeInFs = true;
+              break;
+            }
+          }
+        } catch (e) {}
+        if (iframeInFs) return;
+      } else if (!isTopFrame && !hasLocalFs) {
+        return;
+      }
+
       if (isTranslating) {
         sendResponse({ error: 'already-translating' });
         return true;
@@ -135,6 +270,7 @@
       startSelectionMode();
       sendResponse({ status: 'selection-started' });
     } else if (message.action === 'trigger-text-translation') {
+      if (!shouldHandleInThisFrame) return;
       hideFloatingTranslateIcon();
       if (isTranslating) {
         sendResponse({ error: 'already-translating' });
@@ -147,26 +283,27 @@
         sendResponse({ error: 'no-selection' });
       }
     } else if (message.action === 'show-loading') {
-      if (!isTopFrame) return;
+      if (!shouldHandleInThisFrame) return;
       showLoading(message.text || '...');
       sendResponse({ status: 'loading-shown' });
     } else if (message.action === 'hide-loading') {
-      if (!isTopFrame) return;
+      if (!shouldHandleInThisFrame) return;
       hideLoading();
       sendResponse({ status: 'loading-hidden' });
     } else if (message.action === 'render-translation') {
-      if (!isTopFrame) return;
+      if (!shouldHandleInThisFrame) return;
       hideLoading();
       renderTranslation(message.data, message.rect, message.isText, message.pageScrollX || 0, message.pageScrollY || 0);
       sendResponse({ status: 'translation-rendered' });
     } else if (message.action === 'show-error') {
-      if (!isTopFrame) return;
+      if (!shouldHandleInThisFrame) return;
       hideLoading();
+      resumeAutoPausedVideo();
       const localizedError = getLocalErrorMsg(message.error, currentUiLang);
       showToastError(localizedError);
       sendResponse({ status: 'error-shown' });
     } else if (message.action === 'crop-screenshot') {
-      if (!isTopFrame) return;
+      if (!shouldHandleInThisFrame) return;
       cropImage(message.base64Data, message.rect, message.devicePixelRatio)
         .then(croppedBase64 => sendResponse({ croppedBase64 }))
         .catch(err => sendResponse({ error: err.message }));
@@ -254,7 +391,7 @@
   }
 
   // Handle global key events (ESC to close, Alt+Shift+S and Alt+Shift+D as local fallbacks)
-  document.addEventListener('keydown', (e) => {
+  window.addEventListener('keydown', (e) => {
     if (!isContextValid()) return;
     // 1. ESC to cancel selection, clear translations or cancel loading
     if (e.key === 'Escape') {
@@ -272,7 +409,7 @@
     // Don't trigger shortcuts if user is typing in inputs or contenteditable fields
     const activeEl = document.activeElement;
     if (activeEl) {
-      const tagName = activeEl.tagName.toLowerCase();
+      const tagName = activeEl.tagName ? activeEl.tagName.toLowerCase() : '';
       if (tagName === 'input' || tagName === 'textarea' || tagName === 'select' || activeEl.isContentEditable) {
         return;
       }
@@ -281,6 +418,7 @@
     // 2. Alt + Shift + S: Screenshot Crop Selection Mode
     if (e.altKey && e.shiftKey && (e.key === 'S' || e.key === 's')) {
       e.preventDefault();
+      e.stopPropagation();
       if (isTranslating) return;
       startSelectionMode();
     }
@@ -288,6 +426,7 @@
     // 3. Alt + Shift + F: Translate Highlighted Text
     if (e.altKey && e.shiftKey && (e.key === 'F' || e.key === 'f')) {
       e.preventDefault();
+      e.stopPropagation();
       hideFloatingTranslateIcon(); // Hide icon if visible before translating
       if (isTranslating) return;
       triggerTextTranslation(true);
@@ -296,9 +435,10 @@
     // 4. Alt + Shift + W: Open Quick Translation Popup (Fallback)
     if (e.altKey && e.shiftKey && (e.key === 'W' || e.key === 'w')) {
       e.preventDefault();
+      e.stopPropagation();
       safeSendMessage({ action: 'open-popup' });
     }
-  });
+  }, true);
 
   // 1. Selection Mode (Win+Shift+S style)
   function startSelectionMode() {
@@ -308,13 +448,16 @@
     cancelSelectionMode();
     isTranslating = true; // Block other translate actions during selection mode
 
+    // Pause all playing videos across light DOM and shadow roots
+    pauseAllPlayingVideos();
+
     const dict = CONTENT_LOCALIZATION[currentUiLang] || CONTENT_LOCALIZATION.vi;
 
     // Create instruction helper bar
     helperBar = document.createElement('div');
     helperBar.className = 'gst-helper-bar';
     helperBar.innerHTML = `<span>${dict.helperText}</span> <span style="opacity: 0.6; font-size: 11px;">${dict.cancelText}</span>`;
-    getActiveContainer().appendChild(helperBar);
+    appendToActiveContainer(helperBar);
 
     // Create selection overlay
     selectionOverlay = document.createElement('div');
@@ -322,11 +465,11 @@
     
     const canvas = document.createElement('canvas');
     selectionOverlay.appendChild(canvas);
-    getActiveContainer().appendChild(selectionOverlay);
+    appendToActiveContainer(selectionOverlay);
 
     const dpr = window.devicePixelRatio || 1;
-    let width = window.innerWidth;
-    let height = window.innerHeight;
+    const width = window.innerWidth || screen.width;
+    const height = window.innerHeight || screen.height;
 
     canvas.width = width * dpr;
     canvas.height = height * dpr;
@@ -341,10 +484,7 @@
     ctx.fillRect(0, 0, width, height);
 
     let isDrawing = false;
-    let startX = 0;
-    let startY = 0;
-    let currentX = 0;
-    let currentY = 0;
+    let startX = 0, startY = 0, currentX = 0, currentY = 0;
 
     function drawSelection() {
       // Clear canvas
@@ -354,17 +494,14 @@
       ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
       ctx.fillRect(0, 0, width, height);
 
-      // Determine bounding rect coordinates
+      // Rectangle Box Cutout & Stroke
       const x = Math.min(startX, currentX);
       const y = Math.min(startY, currentY);
       const w = Math.abs(startX - currentX);
       const h = Math.abs(startY - currentY);
 
       if (w > 0 && h > 0) {
-        // Clear selection area
         ctx.clearRect(x, y, w, h);
-        
-        // Draw selection border (dashed white line)
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 1.5;
         ctx.setLineDash([6, 4]);
@@ -372,23 +509,76 @@
       }
     }
 
+    // Intercept ESC key so cancelling crop mode NEVER exits fullscreen mode
+    const handleEscKeyCancel = (e) => {
+      if (e.key === 'Escape' || e.keyCode === 27) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+        cancelSelectionMode();
+        resumeAutoPausedVideo();
+        window.removeEventListener('keydown', handleEscKeyCancel, true);
+      }
+    };
+    window.addEventListener('keydown', handleEscKeyCancel, true);
+
+    // Right-click cancel handler
+    const handleRightClickCancel = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      window.removeEventListener('keydown', handleEscKeyCancel, true);
+      cancelSelectionMode();
+      resumeAutoPausedVideo();
+    };
+
+    // Block all pointer and click events from leaking down to underlying video elements
+    const blockEventPropagation = (e) => {
+      e.stopPropagation();
+      if (e.type === 'click' || e.type === 'dblclick') {
+        e.preventDefault();
+      }
+    };
+
+    ['click', 'dblclick', 'pointerdown', 'pointerup', 'pointermove'].forEach(evt => {
+      selectionOverlay.addEventListener(evt, blockEventPropagation, true);
+    });
+
+    selectionOverlay.addEventListener('contextmenu', handleRightClickCancel, true);
+
     selectionOverlay.addEventListener('mousedown', (e) => {
-      if (e.button !== 0) return; // Only left click
+      e.stopPropagation();
+      e.preventDefault();
+      if (e.button === 2) { // Right-click button
+        handleRightClickCancel(e);
+        return;
+      }
+      if (e.button !== 0) return; // Only left click for drawing
+
+      // Remove helperBar completely when mouse starts drawing so helper bar is NEVER captured in screenshots
+      if (helperBar) {
+        helperBar.remove();
+        helperBar = null;
+      }
+
       isDrawing = true;
       startX = e.clientX;
       startY = e.clientY;
       currentX = startX;
       currentY = startY;
-    });
+    }, true);
 
     selectionOverlay.addEventListener('mousemove', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
       if (!isDrawing) return;
       currentX = e.clientX;
       currentY = e.clientY;
       drawSelection();
-    });
+    }, true);
 
     selectionOverlay.addEventListener('mouseup', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
       if (!isDrawing) return;
       isDrawing = false;
 
@@ -427,17 +617,20 @@
           devicePixelRatio: dpr,
           context: context
         });
+      } else {
+        // Selection too small, no translation will take place — resume video immediately
+        resumeAutoPausedVideo();
       }
-    });
+    }, true);
   }
 
   function cancelSelectionMode() {
     if (selectionOverlay) {
-      selectionOverlay.remove();
+      removeFromActiveContainer(selectionOverlay);
       selectionOverlay = null;
     }
     if (helperBar) {
-      helperBar.remove();
+      removeFromActiveContainer(helperBar);
       helperBar = null;
     }
     isTranslating = false; // Reset block when selection is cancelled
@@ -492,7 +685,7 @@
 
   // 2. Loading indicator
   function showLoading(text) {
-    if (loadingOverlay) loadingOverlay.remove();
+    if (loadingOverlay) removeFromActiveContainer(loadingOverlay);
     isTranslating = true;
 
     loadingOverlay = document.createElement('div');
@@ -514,11 +707,20 @@
       e.preventDefault();
       e.stopPropagation();
       hideLoading();
+      resumeAutoPausedVideo();
       safeSendMessage({ action: 'cancel-translation' });
     });
     loadingOverlay.appendChild(cancelBtn);
 
-    getActiveContainer().appendChild(loadingOverlay);
+    appendToActiveContainer(loadingOverlay);
+  }
+
+  function hideLoading() {
+    isTranslating = false;
+    if (loadingOverlay) {
+      removeFromActiveContainer(loadingOverlay);
+      loadingOverlay = null;
+    }
   }
 
   // 3. Render Translations
@@ -593,12 +795,8 @@
 
     translationContainer = document.createElement('div');
     translationContainer.className = 'gst-translation-container';
-    // Always append to body so absolute positioning with scroll offsets is accurate
-    document.body.appendChild(translationContainer);
+    appendToActiveContainer(translationContainer);
 
-    // Language badge removed by user request
-
-    // Check if there are translations returned
     if (!data.translations || data.translations.length === 0) {
       const errorBlock = document.createElement('div');
       errorBlock.className = 'gst-translation-block';
@@ -629,7 +827,183 @@
       return;
     }
 
-    // Consolidate all translation items into a single unified block to prevent splitting into multiple overlapping popovers
+    if (!isText) {
+      const renderedPrecise = renderPreciseBoxes(data, rect, pageScrollX, pageScrollY);
+      if (renderedPrecise) {
+        activeDocumentClickListener = (e) => {
+          if (e.target.closest('.gst-translation-block')) return;
+          clearTranslation();
+        };
+        setTimeout(() => {
+          if (translationContainer) {
+            document.addEventListener('mousedown', activeDocumentClickListener);
+          }
+        }, 50);
+        return;
+      }
+    }
+
+    renderFallbackSingleBlock(data, rect, isText, pageScrollX, pageScrollY);
+  }
+
+  function renderPreciseBoxes(data, rect, pageScrollX, pageScrollY) {
+    if (!data || !data.translations || data.translations.length === 0) return false;
+
+    const rawItems = data.translations.filter(t => t.translated_text && t.translated_text.trim().length > 0);
+    if (rawItems.length === 0) return false;
+
+    // Merge vertically adjacent & aligned text items into single consolidated boxes
+    const validItems = mergeAdjacentBoxes(rawItems);
+
+    const scaleX = rect.w / 1000;
+    const scaleY = rect.h / 1000;
+
+    let renderedCount = 0;
+
+    validItems.forEach((t) => {
+      let ymin = 0, xmin = 0, ymax = 1000, xmax = 1000;
+      if (Array.isArray(t.box_2d) && t.box_2d.length === 4) {
+        [ymin, xmin, ymax, xmax] = t.box_2d;
+      }
+
+      const rawW = Math.max((xmax - xmin) * scaleX, 10);
+      const rawH = Math.max((ymax - ymin) * scaleY, 10);
+      const rawLeft = pageScrollX + rect.x + xmin * scaleX;
+      const rawTop = pageScrollY + rect.y + ymin * scaleY;
+
+      const SHRINK = 0.82;
+      const boxW = Math.max(rawW * SHRINK, 6);
+      const boxH = Math.max(rawH * SHRINK, 6);
+      const boxLeft = rawLeft + (rawW - boxW) / 2;
+      const boxTop = rawTop + (rawH - boxH) / 2;
+
+      const patch = document.createElement('div');
+      patch.className = 'gst-translation-block gst-inline-patch';
+
+      patch.style.position = 'absolute';
+      patch.style.left = boxLeft + 'px';
+      patch.style.top = boxTop + 'px';
+      patch.style.width = 'max-content';
+      patch.style.height = 'auto';
+      patch.style.minWidth = '30px';
+      patch.style.maxWidth = Math.min(Math.max(boxW * 1.5, 300), window.innerWidth - 40) + 'px';
+      patch.style.whiteSpace = 'pre-wrap';
+      patch.style.wordBreak = 'normal';
+      patch.style.overflowWrap = 'normal';
+      patch.style.minHeight = '18px';
+      patch.style.padding = '4px 8px';
+
+      const isValidHexColor = (color) => {
+        if (!color || typeof color !== 'string') return false;
+        return /^#([0-9A-F]{3,4}|[0-9A-F]{6}|[0-9A-F]{8})$/i.test(color.trim());
+      };
+
+      if (t.background_color_hex && isValidHexColor(t.background_color_hex)) {
+        patch.style.backgroundColor = t.background_color_hex;
+      }
+      if (t.text_color_hex && isValidHexColor(t.text_color_hex)) {
+        patch.style.color = t.text_color_hex;
+      }
+
+      const textSpan = document.createElement('span');
+      textSpan.textContent = t.translated_text.trim();
+      patch.appendChild(textSpan);
+
+      makeElementDraggable(patch, patch);
+
+      patch.addEventListener('click', (e) => {
+        if (patch.dataset.dragged === "true") {
+          patch.dataset.dragged = "false";
+          return;
+        }
+        patch.remove();
+        if (translationContainer && translationContainer.querySelectorAll('.gst-translation-block').length === 0) {
+          clearTranslation();
+        }
+      });
+
+      translationContainer.appendChild(patch);
+      renderedCount++;
+    });
+
+    return renderedCount > 0;
+  }
+
+  function mergeAdjacentBoxes(validItems) {
+    if (!validItems || validItems.length <= 1) return validItems;
+
+    const getBounds = (item) => {
+      if (Array.isArray(item.box_2d) && item.box_2d.length === 4) {
+        return item.box_2d;
+      }
+      return [0, 0, 1000, 1000];
+    };
+
+    const sorted = [...validItems].sort((a, b) => getBounds(a)[0] - getBounds(b)[0]);
+    const merged = [];
+    let currentGroup = [sorted[0]];
+
+    for (let i = 1; i < sorted.length; i++) {
+      const prev = currentGroup[currentGroup.length - 1];
+      const curr = sorted[i];
+
+      const [pYmin, pXmin, pYmax, pXmax] = getBounds(prev);
+      const [cYmin, cXmin, cYmax, cXmax] = getBounds(curr);
+
+      const vDistance = cYmin - pYmax;
+      const isVerticallyClose = vDistance < 180;
+
+      const hOverlap = Math.max(0, Math.min(pXmax, cXmax) - Math.max(pXmin, cXmin));
+      const pWidth = pXmax - pXmin;
+      const cWidth = cXmax - cXmin;
+      const isHorizontallyAligned = (hOverlap > 0.2 * Math.min(pWidth, cWidth)) || (Math.abs(pXmin - cXmin) < 300);
+
+      if (isVerticallyClose && isHorizontallyAligned) {
+        currentGroup.push(curr);
+      } else {
+        merged.push(createMergedGroupItem(currentGroup));
+        currentGroup = [curr];
+      }
+    }
+
+    if (currentGroup.length > 0) {
+      merged.push(createMergedGroupItem(currentGroup));
+    }
+
+    return merged;
+  }
+
+  function createMergedGroupItem(group) {
+    if (group.length === 1) return group[0];
+
+    let minYmin = Infinity, minXmin = Infinity;
+    let maxYmax = -Infinity, maxXmax = -Infinity;
+    const texts = [];
+
+    group.forEach(item => {
+      const [ymin, xmin, ymax, xmax] = (Array.isArray(item.box_2d) && item.box_2d.length === 4)
+        ? item.box_2d
+        : [0, 0, 1000, 1000];
+      if (ymin < minYmin) minYmin = ymin;
+      if (xmin < minXmin) minXmin = xmin;
+      if (ymax > maxYmax) maxYmax = ymax;
+      if (xmax > maxXmax) maxXmax = xmax;
+
+      if (item.translated_text && item.translated_text.trim()) {
+        texts.push(item.translated_text.trim());
+      }
+    });
+
+    return {
+      box_2d: [minYmin, minXmin, maxYmax, maxXmax],
+      original_text: group.map(g => g.original_text).filter(Boolean).join(' '),
+      translated_text: texts.join('\n'),
+      background_color_hex: group[0].background_color_hex,
+      text_color_hex: group[0].text_color_hex
+    };
+  }
+
+  function renderFallbackSingleBlock(data, rect, isText, pageScrollX, pageScrollY) {
     let consolidatedText = data.translations
       .map(t => (t.translated_text || '').trim())
       .filter(Boolean)
@@ -637,7 +1011,6 @@
 
     if (!consolidatedText.trim()) return;
 
-    // Format text: join short vertical line breaks into natural paragraphs
     if (!isText && consolidatedText.includes('\n')) {
       const rawLines = consolidatedText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
       if (rawLines.length > 1) {
@@ -654,64 +1027,53 @@
       block.classList.add('gst-text-block');
     }
 
-    let currentWidth = 480;
+    let maxBoxWidth = 480;
 
     if (isText) {
-      // Highlighted text selection mode: Set a comfortable reading width matching text selection
       const selWidth = rect.w > 0 ? rect.w : 420;
-      const targetWidth = Math.min(Math.max(selWidth, 340), window.innerWidth - 40);
+      maxBoxWidth = Math.min(Math.max(selWidth, 340), window.innerWidth - 40);
       block.style.display = 'block';
-      block.style.width = targetWidth + 'px';
-      block.style.minWidth = '260px';
+      block.style.width = 'max-content';
+      block.style.minWidth = '220px';
       block.style.maxWidth = Math.min(window.innerWidth - 40, 650) + 'px';
-      block.style.minHeight = Math.max(rect.h, 28) + 'px';
-      block.style.whiteSpace = 'pre-wrap';
-      block.style.wordBreak = 'normal';
-      block.style.overflowWrap = 'break-word';
-      block.style.fontSize = '12.5px';
-      block.style.lineHeight = '1.45';
-      currentWidth = targetWidth;
+      block.style.height = 'auto';
+      block.style.minHeight = '28px';
     } else {
-      // Screenshot crop mode: Match cropped box width and height exactly so border outline frames user's crop area
-      currentWidth = Math.max(rect.w, 60);
-      const currentHeight = Math.max(rect.h, 24);
-      block.style.width = currentWidth + 'px';
-      block.style.minHeight = currentHeight + 'px';
-      block.style.whiteSpace = 'pre-wrap';
-      block.style.wordBreak = 'normal';
-      block.style.overflowWrap = 'break-word';
-      block.style.fontSize = '12.5px';
-      block.style.lineHeight = '1.45';
+      // Fit container tightly around text content without collapsing into vertical single-character strip
+      maxBoxWidth = Math.min(Math.max(rect.w, 300), window.innerWidth - 40);
+      block.style.display = 'inline-block';
+      block.style.width = 'max-content';
+      block.style.height = 'auto';
+      block.style.minWidth = '40px';
+      block.style.maxWidth = maxBoxWidth + 'px';
+      block.style.minHeight = '24px';
+      block.style.padding = '6px 12px';
     }
 
-    // Position at top-left of selection rect
+    block.style.whiteSpace = 'pre-wrap';
+    block.style.wordBreak = 'normal';
+    block.style.overflowWrap = 'normal';
+    block.style.fontSize = '12.5px';
+    block.style.lineHeight = '1.45';
+
     const boxLeft = pageScrollX + rect.x;
     const boxTop = pageScrollY + rect.y;
-    const maxLeft = pageScrollX + window.innerWidth - currentWidth - 15;
+    const maxLeft = pageScrollX + window.innerWidth - maxBoxWidth - 15;
     const safeLeft = Math.max(pageScrollX + 10, Math.min(boxLeft, maxLeft));
 
     block.style.left = safeLeft + 'px';
     block.style.top = boxTop + 'px';
-    block.style.height = 'auto';
+    if (isText) {
+      block.style.height = 'auto';
+    }
 
     const textWrapper = document.createElement('span');
     textWrapper.textContent = consolidatedText;
 
-    let dragHandle = block;
-    if (isText) {
-      block.appendChild(textWrapper);
-    } else {
-      const innerContainer = document.createElement('div');
-      innerContainer.className = 'gst-translation-block-inner';
-      innerContainer.appendChild(textWrapper);
-      block.appendChild(innerContainer);
-      dragHandle = innerContainer;
-    }
+    block.appendChild(textWrapper);
 
-    // Make it draggable
-    makeElementDraggable(block, dragHandle);
+    makeElementDraggable(block, block);
 
-    // Click to close ONLY this block
     block.addEventListener('click', (e) => {
       if (block.dataset.dragged === "true") {
         block.dataset.dragged = "false";
@@ -723,15 +1085,8 @@
 
     translationContainer.appendChild(block);
 
-    // Close all translations when clicking anywhere OUTSIDE the translation blocks
     activeDocumentClickListener = (e) => {
-      // Don't close if user clicked inside any translation block
       if (e.target.closest('.gst-translation-block')) return;
-
-      const selection = window.getSelection().toString();
-      if (selection.trim().length > 0) return;
-      
-      clearTranslation();
     };
 
     setTimeout(() => {
@@ -848,8 +1203,10 @@
   }
 
   function clearTranslation() {
+    isTranslating = false;
+    resumeAutoPausedVideo();
     if (translationContainer) {
-      translationContainer.remove();
+      removeFromActiveContainer(translationContainer);
       translationContainer = null;
     }
     if (activeDocumentClickListener) {
@@ -1016,4 +1373,16 @@
       hideFloatingTranslateIcon();
     }
   });
+
+  // Handle entering/exiting fullscreen mode cleanly to prevent state locking
+  const handleFullscreenStateChange = () => {
+    isTranslating = false;
+    cancelSelectionMode();
+    clearTranslation();
+  };
+
+  document.addEventListener('fullscreenchange', handleFullscreenStateChange);
+  document.addEventListener('webkitfullscreenchange', handleFullscreenStateChange);
+  document.addEventListener('mozfullscreenchange', handleFullscreenStateChange);
+  document.addEventListener('MSFullscreenChange', handleFullscreenStateChange);
 })();

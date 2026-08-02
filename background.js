@@ -114,6 +114,23 @@ function clearController(tabId, controller) {
   }
 }
 
+async function broadcastToAllFrames(tabId, message) {
+  chrome.tabs.sendMessage(tabId, message).catch(() => {});
+  if (chrome.webNavigation && chrome.webNavigation.getAllFrames) {
+    try {
+      chrome.webNavigation.getAllFrames({ tabId: tabId }, (frames) => {
+        if (frames && Array.isArray(frames)) {
+          frames.forEach(f => {
+            if (f.frameId !== 0) {
+              chrome.tabs.sendMessage(tabId, message, { frameId: f.frameId }).catch(() => {});
+            }
+          });
+        }
+      });
+    } catch (e) {}
+  }
+}
+
 // Send trigger message to the tab (handles pre-registered content script or fallbacks to injection)
 async function triggerSelection(tabId, action) {
   // Read uiLang
@@ -122,26 +139,25 @@ async function triggerSelection(tabId, action) {
   });
   const uiLang = storage.uiLang || 'en';
 
+  // Broadcast video pause & trigger action to ALL frames in tab
+  broadcastToAllFrames(tabId, { action: 'pause-video' });
+  broadcastToAllFrames(tabId, { action: action, uiLang: uiLang });
+
+  // Ensure content script is dynamically injected if not present
   try {
-    await chrome.tabs.sendMessage(tabId, { action: action, uiLang: uiLang });
-  } catch (err) {
-    console.log('Content script not ready on tab, injecting dynamically...', err);
-    try {
-      await chrome.scripting.insertCSS({
-        target: { tabId: tabId },
-        files: ['content.css']
-      });
+    await chrome.scripting.insertCSS({
+      target: { tabId: tabId, allFrames: true },
+      files: ['content.css']
+    });
 
-      await chrome.scripting.executeScript({
-        target: { tabId: tabId },
-        files: ['jsQR.js', 'content.js']
-      });
+    await chrome.scripting.executeScript({
+      target: { tabId: tabId, allFrames: true },
+      files: ['jsQR.js', 'content.js']
+    });
 
-      // Retry message
-      await chrome.tabs.sendMessage(tabId, { action: action, uiLang: uiLang });
-    } catch (injectErr) {
-      console.warn('Dynamic injection failed:', injectErr);
-    }
+    broadcastToAllFrames(tabId, { action: action, uiLang: uiLang });
+  } catch (injectErr) {
+    // Dynamic injection skipped if script already active
   }
 }
 
@@ -399,6 +415,9 @@ async function handleCropAndTranslation(tabId, rect, dpr, context, pageScrollX =
     if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
 
     const tCaptureStart = performance.now();
+    // Short 60ms delay ensures DOM repaints completely clean screen before capture
+    await new Promise(r => setTimeout(r, 60));
+
     // Capture visible viewport at quality 50 for fast capture
     const fullScreenshotBase64 = await chrome.tabs.captureVisibleTab(null, {
       format: 'jpeg',
@@ -514,43 +533,25 @@ async function executeGeminiImageTranslation(tabId, croppedBase64, rect, context
 - Website Domain: "${context.domain || ''}"
 - Page Title: "${context.pageTitle || ''}"` : '';
 
-  const prompt = `Bạn là công cụ dịch màn hình. Đây là ảnh chụp một vùng màn hình được người dùng khoanh chọn (crop). Hãy xác định TẤT CẢ text trong ảnh và dịch sang ${targetLang}.
+  const prompt = `Dịch toàn bộ văn bản trong ảnh crop này sang ${targetLang}. Giữ nguyên tên riêng & thuật ngữ game/kỹ thuật.
 
-BƯỚC 1 — Xác định ngữ cảnh trước khi dịch:
-Dựa vào metadata trang web bên dưới VÀ các dấu hiệu hình ảnh (HUD, thanh máu, icon vật phẩm, khung hội thoại, bố cục menu đặc trưng của game...), xác định đây là: game, phần mềm/UI, bài viết web, đoạn chat, phụ đề video, hay loại khác. Nếu nhận ra tên game/app/website cụ thể, ghi vào detected_source.
+QUAN TRỌNG VỀ GOM NHÓM VĂN BẢN (TEXT GROUPING):
+- Nếu các dòng/câu chữ thuộc cùng một đoạn văn, bài viết, hoặc nằm nối tiếp nhau, HÃY GOM CHÚNG THÀNH 1 ITEM DUY NHẤT trong mảng "translations" thay vì chia lắt nhắt thành nhiều item.
+- Chỉ tách thành các item riêng biệt nếu chúng nằm ở các vị trí hoàn toàn xa nhau (ví dụ: 2 bong bóng thoại riêng biệt ở 2 góc khác nhau).
 
-BƯỚC 2 — Nếu là GAME hoặc UI dạng game:
-- Giữ nguyên tên riêng: tên nhân vật, tên NPC, tên bản đồ/địa danh, tên phe/guild.
-- Giữ nguyên thuật ngữ hệ thống: tên skill/chiêu thức, tên item/trang bị, tên currency trong game, tên chỉ số — TRỪ KHI game này đã có bản Việt hóa chính thức phổ biến, khi đó dùng đúng tên Việt hóa đó.
-- Giữ nguyên các từ mượn đã quen thuộc với cộng đồng game Việt (boss, combo, build, gacha, banner, farm, buff, nerf...) thay vì dịch cưỡng ép.
-- Hội thoại/cốt truyện: dịch tự nhiên, giữ đúng giọng điệu nhân vật.
-
-BƯỚC 3 — Nếu KHÔNG phải game (bài viết, UI phần mềm thường, chat, tài liệu...):
-- Dịch tự nhiên, đúng nghĩa. Chỉ giữ nguyên nhãn UI khi dịch ra sẽ gây khó hiểu hoặc sai ngữ cảnh kỹ thuật.
-
-BƯỚC 4 — Nếu câu bị cắt cụt do vùng chụp giới hạn:
-- Chỉ dịch phần nhìn thấy được. TUYỆT ĐỐI không đoán/bịa phần bị cắt mất.
-
-Trả về JSON đúng schema sau, KHÔNG thêm text nào khác:
+Trả về JSON ngắn gọn đúng schema:
 {
-  "context_type": "game" | "software_ui" | "web_article" | "chat" | "subtitle" | "document" | "other",
-  "detected_source": "tên game/app/website cụ thể nếu nhận ra, hoặc null",
-  "detected_source_language": "tên ngôn ngữ gốc bằng tiếng Anh (VD: English, Japanese, French...)",
+  "context_type": "game" | "software_ui" | "web_article" | "chat" | "subtitle" | "other",
+  "detected_source": "tên game/app/website nếu biết, hoặc null",
   "translations": [
     {
       "box_2d": [ymin, xmin, ymax, xmax],
       "original_text": "text gốc",
-      "translated_text": "text đã dịch",
-      "kept_terms": ["các thuật ngữ giữ nguyên trong block này, nếu có"],
-      "background_color_hex": "mã màu nền vùng chữ, VD #FFFFFF",
-      "text_color_hex": "mã màu chữ gốc, VD #000000"
+      "translated_text": "text đã dịch"
     }
   ]
 }
-Ghi chú:
-- box_2d là số nguyên chuẩn hóa 0-1000 theo [ymin, xmin, ymax, xmax] của ảnh crop này.
-- original_text giữ nguyên văn text gốc.
-- background_color_hex/text_color_hex phân tích trực tiếp từ ảnh cho từng block.${contextPrompt}${glossaryPrompt}`;
+Ghi chú: box_2d là tọa độ [ymin, xmin, ymax, xmax] chuẩn hóa 0-1000 trong ảnh crop này.${contextPrompt}${glossaryPrompt}`;
 
   const payload = {
     contents: [
@@ -584,6 +585,18 @@ Ghi chú:
     try {
       const data = await callGeminiApiWithFallback(keyItem, payload, signal);
       data.target_language = targetLang;
+
+      // Filter out any helper bar text if accidentally captured
+      if (data && data.translations && Array.isArray(data.translations)) {
+        data.translations = data.translations.filter(item => {
+          const orig = (item.original_text || '').toLowerCase();
+          const trans = (item.translated_text || '').toLowerCase();
+          const isHelperText = orig.includes('kéo chuột') || orig.includes('drag mouse') ||
+                               orig.includes('chuột phải để hủy') || trans.includes('kéo chuột') ||
+                               trans.includes('drag mouse');
+          return !isHelperText;
+        });
+      }
 
       const allKeptTerms = (data.translations || []).flatMap(t => t.kept_terms || []);
       if (data.detected_source) {
