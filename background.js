@@ -535,11 +535,10 @@ async function executeGeminiImageTranslation(tabId, croppedBase64, rect, context
 
   const prompt = `Dịch toàn bộ văn bản trong ảnh crop này sang ${targetLang}.
 
-QUY TẮC DỊCH CHẤT LƯỢNG CAO (HIGH QUALITY TRANSLATION):
-1. Dịch chuẩn xác, tự nhiên, đúng ngữ cảnh (Game UI, Web UI, Bài viết, Chat, hoặc Phụ đề phim).
+QUY TẮC DỊCH:
+1. Dịch chuẩn xác, tự nhiên, đúng ngữ cảnh (Game UI, Web UI, Bài viết, Chat, Meme, hoặc Phụ đề phim).
 2. Giữ nguyên tên riêng, phím tắt, hằng số & thuật ngữ kỹ thuật/game.
-3. VỚI GIAO DIỆN (UI/Menu/Settings/Options): Tách từng nhãn nút, tiêu đề và tùy chọn (Option) thành các item riêng biệt với box_2d chính xác bao quanh đúng từng vị trí nút/tùy chọn đó.
-4. VỚI ĐOẠN VĂN/BÀI VIẾT/PHỤ ĐỀ VĂN BẢN: Gom các dòng/câu thuộc cùng 1 đoạn thành 1 item duy nhất với box_2d bao quanh đoạn văn đó.
+3. Gom các câu/dòng văn bản trong ảnh crop thành văn bản hoàn chỉnh, dịch trôi chảy và tự nhiên.
 
 Trả về JSON ngắn gọn đúng schema:
 {
@@ -547,13 +546,12 @@ Trả về JSON ngắn gọn đúng schema:
   "detected_source": "tên game/app/website nếu biết, hoặc null",
   "translations": [
     {
-      "box_2d": [ymin, xmin, ymax, xmax],
       "original_text": "text gốc",
       "translated_text": "text đã dịch"
     }
   ]
 }
-Ghi chú: box_2d là tọa độ [ymin, xmin, ymax, xmax] chuẩn hóa 0-1000 trong ảnh crop này.${contextPrompt}${glossaryPrompt}`;
+Ghi chú: Trả về văn bản đã dịch đầy đủ, ngắn gọn.${contextPrompt}${glossaryPrompt}`;
 
   const payload = {
     contents: [

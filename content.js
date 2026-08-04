@@ -787,254 +787,27 @@
   function renderTranslation(data, rect, isText = false, pageScrollX = 0, pageScrollY = 0) {
     clearTranslation();
 
-    const isValidHexColor = (color) => {
-      if (!color || typeof color !== 'string') return false;
-      return /^#([0-9A-F]{3,4}|[0-9A-F]{6}|[0-9A-F]{8})$/i.test(color.trim());
-    };
-
     const dict = CONTENT_LOCALIZATION[currentUiLang] || CONTENT_LOCALIZATION.vi;
 
     translationContainer = document.createElement('div');
     translationContainer.className = 'gst-translation-container';
     appendToActiveContainer(translationContainer);
 
-    if (!data.translations || data.translations.length === 0) {
-      const errorBlock = document.createElement('div');
-      errorBlock.className = 'gst-translation-block';
-      if (isText) {
-        errorBlock.classList.add('gst-text-block');
-      }
-      errorBlock.style.left = (pageScrollX + rect.x) + 'px';
-      errorBlock.style.top = (pageScrollY + rect.y) + 'px';
-      errorBlock.style.width = 'auto';
-      errorBlock.style.minWidth = rect.w + 'px';
-      errorBlock.style.maxWidth = '280px';
-      errorBlock.style.minHeight = rect.h + 'px';
-      errorBlock.style.height = 'auto';
-      errorBlock.style.fontSize = '12px';
-      errorBlock.style.color = '#ff6b6b';
-      errorBlock.textContent = dict.noTextFound;
-
-      translationContainer.appendChild(errorBlock);
-
-      activeDocumentClickListener = (e) => {
-        clearTranslation();
-      };
-      setTimeout(() => {
-        if (translationContainer) {
-          document.addEventListener('mousedown', activeDocumentClickListener);
-        }
-      }, 50);
+    if (!data || !data.translations || data.translations.length === 0) {
+      showToastError(dict.noTextFound);
+      clearTranslation();
       return;
     }
 
-    if (!isText) {
-      const renderedPrecise = renderPreciseBoxes(data, rect, pageScrollX, pageScrollY);
-      if (renderedPrecise) {
-        activeDocumentClickListener = (e) => {
-          if (e.target.closest('.gst-translation-block')) return;
-          clearTranslation();
-        };
-        setTimeout(() => {
-          if (translationContainer) {
-            document.addEventListener('mousedown', activeDocumentClickListener);
-          }
-        }, 50);
-        return;
-      }
-    }
-
-    renderFallbackSingleBlock(data, rect, isText, pageScrollX, pageScrollY);
-  }
-
-  function renderPreciseBoxes(data, rect, pageScrollX, pageScrollY) {
-    if (!data || !data.translations || data.translations.length === 0) return false;
-
-    const rawItems = data.translations.filter(t => t.translated_text && t.translated_text.trim().length > 0);
-    if (rawItems.length === 0) return false;
-
-    // Merge vertically adjacent & aligned text items into single consolidated boxes (skip merging for software_ui/game UI menus)
-    const validItems = mergeAdjacentBoxes(rawItems, data.context_type);
-
-    const scaleX = rect.w / 1000;
-    const scaleY = rect.h / 1000;
-
-    let renderedCount = 0;
-
-    validItems.forEach((t) => {
-      let ymin = 0, xmin = 0, ymax = 1000, xmax = 1000;
-      if (Array.isArray(t.box_2d) && t.box_2d.length === 4) {
-        [ymin, xmin, ymax, xmax] = t.box_2d;
-      }
-
-      const rawW = Math.max((xmax - xmin) * scaleX, 10);
-      const rawH = Math.max((ymax - ymin) * scaleY, 10);
-      const rawLeft = pageScrollX + rect.x + xmin * scaleX;
-      const rawTop = pageScrollY + rect.y + ymin * scaleY;
-
-      const SHRINK = 0.82;
-      const boxW = Math.max(rawW * SHRINK, 6);
-      const boxH = Math.max(rawH * SHRINK, 6);
-      const boxLeft = rawLeft + (rawW - boxW) / 2;
-      const boxTop = rawTop + (rawH - boxH) / 2;
-
-      const patch = document.createElement('div');
-      patch.className = 'gst-translation-block gst-inline-patch';
-
-      patch.style.position = 'absolute';
-      patch.style.left = boxLeft + 'px';
-      patch.style.top = boxTop + 'px';
-      patch.style.width = 'max-content';
-      patch.style.height = 'auto';
-      patch.style.minWidth = '30px';
-      patch.style.maxWidth = Math.min(Math.max(boxW * 1.5, 300), window.innerWidth - 40) + 'px';
-      patch.style.whiteSpace = 'pre-wrap';
-      patch.style.wordBreak = 'normal';
-      patch.style.overflowWrap = 'normal';
-      patch.style.minHeight = '18px';
-      patch.style.padding = '4px 8px';
-
-      const isValidHexColor = (color) => {
-        if (!color || typeof color !== 'string') return false;
-        return /^#([0-9A-F]{3,4}|[0-9A-F]{6}|[0-9A-F]{8})$/i.test(color.trim());
-      };
-
-      if (t.background_color_hex && isValidHexColor(t.background_color_hex)) {
-        patch.style.backgroundColor = t.background_color_hex;
-      }
-      if (t.text_color_hex && isValidHexColor(t.text_color_hex)) {
-        patch.style.color = t.text_color_hex;
-      }
-
-      const textSpan = document.createElement('span');
-      textSpan.textContent = t.translated_text.trim();
-      patch.appendChild(textSpan);
-
-      makeElementDraggable(patch, patch);
-
-      patch.addEventListener('click', (e) => {
-        if (patch.dataset.dragged === "true") {
-          patch.dataset.dragged = "false";
-          return;
-        }
-        patch.remove();
-        if (translationContainer && translationContainer.querySelectorAll('.gst-translation-block').length === 0) {
-          clearTranslation();
-        }
-      });
-
-      translationContainer.appendChild(patch);
-      renderedCount++;
-    });
-
-    return renderedCount > 0;
-  }
-
-  function mergeAdjacentBoxes(validItems, contextType) {
-    if (!validItems || validItems.length <= 1) return validItems;
-
-    // DO NOT merge items if the content is identified as software UI menu or game UI options list
-    if (contextType === 'software_ui' || contextType === 'game') {
-      return validItems;
-    }
-
-    // Detect if items are distinct UI options (e.g. short 1-3 word labels in a vertical menu)
-    const isUIOptionList = validItems.length >= 3 && validItems.every(item => {
-      const wordCount = (item.original_text || '').trim().split(/\s+/).length;
-      return wordCount <= 3;
-    });
-
-    if (isUIOptionList) {
-      return validItems;
-    }
-
-    const getBounds = (item) => {
-      if (Array.isArray(item.box_2d) && item.box_2d.length === 4) {
-        return item.box_2d;
-      }
-      return [0, 0, 1000, 1000];
-    };
-
-    const sorted = [...validItems].sort((a, b) => getBounds(a)[0] - getBounds(b)[0]);
-    const merged = [];
-    let currentGroup = [sorted[0]];
-
-    for (let i = 1; i < sorted.length; i++) {
-      const prev = currentGroup[currentGroup.length - 1];
-      const curr = sorted[i];
-
-      const [pYmin, pXmin, pYmax, pXmax] = getBounds(prev);
-      const [cYmin, cXmin, cYmax, cXmax] = getBounds(curr);
-
-      const vDistance = cYmin - pYmax;
-      const isVerticallyClose = vDistance < 90;
-
-      const hOverlap = Math.max(0, Math.min(pXmax, cXmax) - Math.max(pXmin, cXmin));
-      const pWidth = pXmax - pXmin;
-      const cWidth = cXmax - cXmin;
-      const isHorizontallyAligned = (hOverlap > 0.35 * Math.min(pWidth, cWidth));
-
-      if (isVerticallyClose && isHorizontallyAligned) {
-        currentGroup.push(curr);
-      } else {
-        merged.push(createMergedGroupItem(currentGroup));
-        currentGroup = [curr];
-      }
-    }
-
-    if (currentGroup.length > 0) {
-      merged.push(createMergedGroupItem(currentGroup));
-    }
-
-    return merged;
-  }
-
-  function createMergedGroupItem(group) {
-    if (group.length === 1) return group[0];
-
-    let minYmin = Infinity, minXmin = Infinity;
-    let maxYmax = -Infinity, maxXmax = -Infinity;
-    const texts = [];
-
-    group.forEach(item => {
-      const [ymin, xmin, ymax, xmax] = (Array.isArray(item.box_2d) && item.box_2d.length === 4)
-        ? item.box_2d
-        : [0, 0, 1000, 1000];
-      if (ymin < minYmin) minYmin = ymin;
-      if (xmin < minXmin) minXmin = xmin;
-      if (ymax > maxYmax) maxYmax = ymax;
-      if (xmax > maxXmax) maxXmax = xmax;
-
-      if (item.translated_text && item.translated_text.trim()) {
-        texts.push(item.translated_text.trim());
-      }
-    });
-
-    return {
-      box_2d: [minYmin, minXmin, maxYmax, maxXmax],
-      original_text: group.map(g => g.original_text).filter(Boolean).join(' '),
-      translated_text: texts.join('\n'),
-      background_color_hex: group[0].background_color_hex,
-      text_color_hex: group[0].text_color_hex
-    };
-  }
-
-  function renderFallbackSingleBlock(data, rect, isText, pageScrollX, pageScrollY) {
     let consolidatedText = data.translations
       .map(t => (t.translated_text || '').trim())
       .filter(Boolean)
       .join('\n\n');
 
-    if (!consolidatedText.trim()) return;
-
-    if (!isText && consolidatedText.includes('\n')) {
-      const rawLines = consolidatedText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-      if (rawLines.length > 1) {
-        const avgLen = rawLines.reduce((sum, l) => sum + l.length, 0) / rawLines.length;
-        if (avgLen < 25) {
-          consolidatedText = rawLines.join(' ');
-        }
-      }
+    if (!consolidatedText.trim()) {
+      showToastError(dict.noTextFound);
+      clearTranslation();
+      return;
     }
 
     const block = document.createElement('div');
@@ -1043,45 +816,45 @@
       block.classList.add('gst-text-block');
     }
 
-    let maxBoxWidth = 480;
+    const boxLeft = pageScrollX + rect.x;
+    const boxTop = pageScrollY + rect.y;
 
     if (isText) {
       const selWidth = rect.w > 0 ? rect.w : 420;
-      maxBoxWidth = Math.min(Math.max(selWidth, 340), window.innerWidth - 40);
+      const maxBoxWidth = Math.min(Math.max(selWidth, 300), window.innerWidth - 40);
       block.style.display = 'block';
       block.style.width = 'max-content';
-      block.style.minWidth = '220px';
+      block.style.minWidth = '240px';
       block.style.maxWidth = Math.min(window.innerWidth - 40, 650) + 'px';
       block.style.height = 'auto';
       block.style.minHeight = '28px';
+
+      const maxLeft = pageScrollX + window.innerWidth - maxBoxWidth - 15;
+      const safeLeft = Math.max(pageScrollX + 10, Math.min(boxLeft, maxLeft));
+
+      block.style.left = safeLeft + 'px';
+      block.style.top = (boxTop + rect.h + 6) + 'px';
     } else {
-      // Fit container tightly around text content without collapsing into vertical single-character strip
-      maxBoxWidth = Math.min(Math.max(rect.w, 300), window.innerWidth - 40);
-      block.style.display = 'inline-block';
-      block.style.width = 'max-content';
+      // Area selection (Khoanh dịch): Match the EXACT width and top-left position of the user's cropped box
+      const targetW = Math.max(rect.w, 60);
+      const safeLeft = Math.max(pageScrollX + 10, Math.min(boxLeft, pageScrollX + window.innerWidth - targetW - 15));
+
+      block.style.display = 'block';
+      block.style.position = 'absolute';
+      block.style.left = safeLeft + 'px';
+      block.style.top = boxTop + 'px';
+      block.style.setProperty('width', targetW + 'px', 'important');
+      block.style.setProperty('max-width', targetW + 'px', 'important');
       block.style.height = 'auto';
-      block.style.minWidth = '40px';
-      block.style.maxWidth = maxBoxWidth + 'px';
-      block.style.minHeight = '24px';
-      block.style.padding = '6px 12px';
+      block.style.padding = '8px 12px';
+      block.style.boxSizing = 'border-box';
     }
 
     block.style.whiteSpace = 'pre-wrap';
-    block.style.wordBreak = 'normal';
-    block.style.overflowWrap = 'normal';
-    block.style.fontSize = '12.5px';
+    block.style.wordBreak = 'break-word';
+    block.style.overflowWrap = 'break-word';
+    block.style.fontSize = '13px';
     block.style.lineHeight = '1.45';
-
-    const boxLeft = pageScrollX + rect.x;
-    const boxTop = pageScrollY + rect.y;
-    const maxLeft = pageScrollX + window.innerWidth - maxBoxWidth - 15;
-    const safeLeft = Math.max(pageScrollX + 10, Math.min(boxLeft, maxLeft));
-
-    block.style.left = safeLeft + 'px';
-    block.style.top = boxTop + 'px';
-    if (isText) {
-      block.style.height = 'auto';
-    }
 
     const textWrapper = document.createElement('span');
     textWrapper.textContent = consolidatedText;
@@ -1103,6 +876,7 @@
 
     activeDocumentClickListener = (e) => {
       if (e.target.closest('.gst-translation-block')) return;
+      clearTranslation();
     };
 
     setTimeout(() => {

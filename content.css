@@ -57,12 +57,17 @@
   line-height: 1.45 !important;
   white-space: pre-wrap !important;
   word-break: normal !important;
-  overflow-wrap: normal !important;
-  width: max-content !important;
-  max-width: calc(100vw - 40px) !important;
+  overflow-wrap: break-word !important;
+  width: fit-content !important;
+  max-width: calc(100vw - 40px);
   overflow: visible !important;
   cursor: move !important; /* Visual indicator for dragging */
   user-select: text !important;
+  
+  /* GPU acceleration & compositing isolation for ultra-smooth scrolling without stutter */
+  transform: translateZ(0) !important;
+  will-change: transform !important;
+  contain: layout style !important;
   
   /* Modern sleek dark container fitting compactly around text */
   background: rgba(18, 18, 22, 0.94) !important;
@@ -71,7 +76,7 @@
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5) !important;
   backdrop-filter: blur(12px) !important;
   -webkit-backdrop-filter: blur(12px) !important;
-  transition: background-color 0.15s ease, backdrop-filter 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease !important;
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease !important;
 }
 
 /* Sleek compact popover style for text selection translation blocks */
@@ -405,6 +410,8 @@
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55) !important;
   backdrop-filter: blur(12px) !important;
   -webkit-backdrop-filter: blur(12px) !important;
+  transform: translateZ(0) !important;
+  will-change: transform !important;
 }
 
 .gst-inline-patch:hover {
