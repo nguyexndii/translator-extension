@@ -17,7 +17,15 @@
   let helperBar = null;
   let loadingOverlay = null;
   let translationContainer = null;
-  let currentUiLang = 'en'; // default UI language
+  let currentUiLang = 'vi'; // default UI language to Vietnamese
+
+  try {
+    chrome.storage.local.get(['uiLang'], (res) => {
+      if (res && res.uiLang) {
+        currentUiLang = res.uiLang;
+      }
+    });
+  } catch (e) {}
   let isTranslating = false;
   let autoPausedVideos = [];
   let preventReplayListeners = [];
@@ -126,29 +134,45 @@
   const CONTENT_LOCALIZATION = {
     vi: {
       helperText: 'Kéo chuột để chọn vùng màn hình cần dịch',
+      qrHelperText: 'Kéo chuột để chọn vùng chứa mã QR',
       cancelText: '(ESC hoặc Chuột phải để hủy)',
       alertNoHighlight: 'Vui lòng bôi đen văn bản trên trang web trước khi dịch!',
       noTextFound: 'Không tìm thấy chữ nào.',
       closeAllTooltip: 'Đóng tất cả bản dịch',
-      errorTitle: 'Lỗi Dịch Thuật',
+      errorTitle: 'Lỗi Tiện Ích',
       errorInvalidKey: 'API Key không hợp lệ. Vui lòng kiểm tra lại cấu hình API Key trong trang Cài đặt (Cấu hình).',
       errorQuota: 'Đã hết lượt sử dụng miễn phí (Vượt quá Quota). Vui lòng thử lại sau hoặc thêm API Key khác.',
       errorNetwork: 'Không kết nối được Internet hoặc API bị chặn. Vui lòng kiểm tra mạng hoặc VPN.',
-      errorGeneric: 'Dịch thất bại. Chi tiết lỗi:',
-      contextInvalidated: 'Tiện ích đã được tải lại hoặc cập nhật. Vui lòng tải lại (F5) trang web để tiếp tục sử dụng Screen Translator.'
+      errorGeneric: 'Thao tác thất bại. Chi tiết lỗi:',
+      contextInvalidated: 'Tiện ích đã được tải lại hoặc cập nhật. Vui lòng tải lại (F5) trang web để tiếp tục sử dụng Screen Translator.',
+      qrScanningText: 'Đang quét mã QR...',
+      qrResultTitle: 'Mã QR đã quét',
+      qrNoFound: 'Không tìm thấy mã QR nào trong vùng chọn.',
+      qrAutoNoFound: 'Không tìm thấy mã QR trên màn hình. Hãy kéo chọn vùng chứa mã QR!',
+      copySuccess: 'Đã chép!',
+      openLink: 'Mở liên kết',
+      copyText: 'Sao chép'
     },
     en: {
       helperText: 'Drag mouse to select screen region to translate',
+      qrHelperText: 'Drag mouse to select QR code area',
       cancelText: '(ESC or Right-click to cancel)',
       alertNoHighlight: 'Please highlight text on the webpage before translating!',
       noTextFound: 'No text found.',
       closeAllTooltip: 'Close all translations',
-      errorTitle: 'Translation Error',
+      errorTitle: 'Extension Error',
       errorInvalidKey: 'Invalid API Key. Please check your API Key configuration in the Settings.',
       errorQuota: 'Quota exceeded. Please try again later or add another API Key.',
       errorNetwork: 'Unable to connect to the Internet or API is blocked. Please check your connection or VPN.',
-      errorGeneric: 'Translation failed. Details:',
-      contextInvalidated: 'Extension context was invalidated due to reload/update. Please reload (F5) the webpage to continue using Screen Translator.'
+      errorGeneric: 'Operation failed. Details:',
+      contextInvalidated: 'Extension context was invalidated due to reload/update. Please reload (F5) the webpage to continue using Screen Translator.',
+      qrScanningText: 'Scanning QR code...',
+      qrResultTitle: 'Scanned QR Code',
+      qrNoFound: 'No QR code found in selection.',
+      qrAutoNoFound: 'No QR code found on screen. Please draw a box around the QR code!',
+      copySuccess: 'Copied!',
+      openLink: 'Open Link',
+      copyText: 'Copy'
     }
   };
 
@@ -236,6 +260,11 @@
     const hasLocalFs = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement);
     const shouldHandleInThisFrame = isTopFrame || hasLocalFs;
 
+    if (message.action === 'ping') {
+      sendResponse({ status: 'pong' });
+      return true;
+    }
+
     if (message.action === 'pause-video') {
       pauseAllPlayingVideos();
       sendResponse({ status: 'video-paused' });
@@ -308,6 +337,36 @@
         .then(croppedBase64 => sendResponse({ croppedBase64 }))
         .catch(err => sendResponse({ error: err.message }));
       return true; // Keep channel open for async response
+    } else if (message.action === 'trigger-qr-selection') {
+      if (!shouldHandleInThisFrame) return;
+      if (isTranslating) {
+        sendResponse({ error: 'already-translating' });
+        return true;
+      }
+      startQrSelectionMode();
+      sendResponse({ status: 'qr-selection-started' });
+    } else if (message.action === 'crop-and-decode-qr') {
+      if (!shouldHandleInThisFrame) return;
+      decodeQrFromImage(message.base64Data, message.rect, message.devicePixelRatio)
+        .then(result => sendResponse({ result }))
+        .catch(err => sendResponse({ error: err.message }));
+      return true;
+    } else if (message.action === 'auto-decode-qr') {
+      if (!shouldHandleInThisFrame) return;
+      autoDecodeQrFromImage(message.base64Data)
+        .then(result => sendResponse({ result }))
+        .catch(err => sendResponse({ error: err.message }));
+      return true;
+    } else if (message.action === 'render-qr-result') {
+      if (!shouldHandleInThisFrame) return;
+      hideLoading();
+      renderQrResult(message.text, message.rect, message.pageScrollX || 0, message.pageScrollY || 0);
+      sendResponse({ status: 'qr-result-rendered' });
+    } else if (message.action === 'render-multiple-qr-results') {
+      if (!shouldHandleInThisFrame) return;
+      hideLoading();
+      renderMultipleQrResults(message.codes, message.pageScrollX || 0, message.pageScrollY || 0);
+      sendResponse({ status: 'multiple-qr-results-rendered' });
     }
     return true;
   });
@@ -892,6 +951,12 @@
 
     const errLower = rawError.toLowerCase();
 
+    if (errLower.includes('no qr') || errLower.includes('không tìm thấy mã qr') || errLower.includes('không tìm thấy qr')) {
+      if (errLower.includes('tự động') || errLower.includes('automatically') || errLower.includes('màn hình')) {
+        return dict.qrAutoNoFound;
+      }
+      return dict.qrNoFound;
+    }
     if (errLower.includes('api key not valid') || (errLower.includes('api key') && errLower.includes('valid'))) {
       return dict.errorInvalidKey;
     }
@@ -903,6 +968,351 @@
     }
 
     return `${dict.errorGeneric} ${rawError}`;
+  }
+
+  // QR Code Crop Selection Mode
+  function startQrSelectionMode() {
+    if (isTranslating) return;
+    clearTranslation();
+    cancelSelectionMode();
+    isTranslating = true;
+
+    pauseAllPlayingVideos();
+
+    const dict = CONTENT_LOCALIZATION[currentUiLang] || CONTENT_LOCALIZATION.vi;
+
+    selectionOverlay = document.createElement('div');
+    selectionOverlay.className = 'gst-selection-overlay';
+    
+    const canvas = document.createElement('canvas');
+    selectionOverlay.appendChild(canvas);
+    appendToActiveContainer(selectionOverlay);
+
+    helperBar = document.createElement('div');
+    helperBar.className = 'gst-helper-bar';
+    helperBar.style.cssText = 'top: 16px !important; align-self: flex-start !important; position: fixed !important; left: 50% !important; transform: translateX(-50%) !important; z-index: 2147483648 !important;';
+    helperBar.innerHTML = `<span>${dict.qrHelperText || 'Kéo chuột để chọn vùng chứa mã QR'}</span> <span style="opacity: 0.6; font-size: 11px;">${dict.cancelText}</span>`;
+    appendToActiveContainer(helperBar);
+
+    const dpr = window.devicePixelRatio || 1;
+    const width = window.innerWidth || screen.width;
+    const height = window.innerHeight || screen.height;
+
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    canvas.style.width = width + 'px';
+    canvas.style.height = height + 'px';
+
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    ctx.fillRect(0, 0, width, height);
+
+    let isDrawing = false;
+    let startX = 0, startY = 0, currentX = 0, currentY = 0;
+
+    function drawSelection() {
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+      ctx.fillRect(0, 0, width, height);
+
+      const x = Math.min(startX, currentX);
+      const y = Math.min(startY, currentY);
+      const w = Math.abs(startX - currentX);
+      const h = Math.abs(startY - currentY);
+
+      if (w > 0 && h > 0) {
+        ctx.clearRect(x, y, w, h);
+        ctx.strokeStyle = '#8ab4f8';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        ctx.strokeRect(x, y, w, h);
+      }
+    }
+
+    const handleEscKeyCancel = (e) => {
+      if (e.key === 'Escape' || e.keyCode === 27) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+        cancelSelectionMode();
+        resumeAutoPausedVideo();
+        window.removeEventListener('keydown', handleEscKeyCancel, true);
+      }
+    };
+    window.addEventListener('keydown', handleEscKeyCancel, true);
+
+    const handleRightClickCancel = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      window.removeEventListener('keydown', handleEscKeyCancel, true);
+      cancelSelectionMode();
+      resumeAutoPausedVideo();
+    };
+
+    const blockEventPropagation = (e) => {
+      e.stopPropagation();
+      if (e.type === 'click' || e.type === 'dblclick') {
+        e.preventDefault();
+      }
+    };
+
+    ['click', 'dblclick', 'pointerdown', 'pointerup', 'pointermove'].forEach(evt => {
+      selectionOverlay.addEventListener(evt, blockEventPropagation, true);
+    });
+
+    selectionOverlay.addEventListener('contextmenu', handleRightClickCancel, true);
+
+    selectionOverlay.addEventListener('mousedown', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (e.button === 2) {
+        handleRightClickCancel(e);
+        return;
+      }
+      if (e.button !== 0) return;
+
+      if (helperBar) {
+        helperBar.remove();
+        helperBar = null;
+      }
+
+      isDrawing = true;
+      startX = e.clientX;
+      startY = e.clientY;
+      currentX = startX;
+      currentY = startY;
+    }, true);
+
+    selectionOverlay.addEventListener('mousemove', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (!isDrawing) return;
+      currentX = e.clientX;
+      currentY = e.clientY;
+      drawSelection();
+    }, true);
+
+    selectionOverlay.addEventListener('mouseup', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (!isDrawing) return;
+      isDrawing = false;
+
+      const x = Math.min(startX, e.clientX);
+      const y = Math.min(startY, e.clientY);
+      const w = Math.abs(startX - e.clientX);
+      const h = Math.abs(startY - e.clientY);
+
+      cancelSelectionMode();
+
+      if (w > 10 && h > 10) {
+        isTranslating = true;
+        const dict = CONTENT_LOCALIZATION[currentUiLang] || CONTENT_LOCALIZATION.vi;
+        showLoading(dict.qrScanningText || 'Đang quét mã QR...');
+
+        const capturedScrollX = window.scrollX;
+        const capturedScrollY = window.scrollY;
+
+        safeSendMessage({
+          action: 'process-qr-selection',
+          rect: { x, y, w, h },
+          pageScrollX: capturedScrollX,
+          pageScrollY: capturedScrollY,
+          devicePixelRatio: dpr
+        });
+      } else {
+        resumeAutoPausedVideo();
+      }
+    }, true);
+  }
+
+  function decodeQrFromImage(base64Data, rect, dpr) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const targetW = Math.max(Math.round(rect.w * dpr), 10);
+          const targetH = Math.max(Math.round(rect.h * dpr), 10);
+
+          const canvas = document.createElement('canvas');
+          canvas.width = targetW;
+          canvas.height = targetH;
+          const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+          ctx.drawImage(
+            img,
+            Math.round(rect.x * dpr),
+            Math.round(rect.y * dpr),
+            targetW,
+            targetH,
+            0,
+            0,
+            targetW,
+            targetH
+          );
+
+          const imgData = ctx.getImageData(0, 0, targetW, targetH);
+          let code = null;
+          if (typeof jsQR !== 'undefined') {
+            code = jsQR(imgData.data, imgData.width, imgData.height, { inversionAttempts: 'dontInvert' }) ||
+                   jsQR(imgData.data, imgData.width, imgData.height, { inversionAttempts: 'attemptBoth' });
+          }
+
+          if (code && code.data) {
+            resolve({ success: true, text: code.data, location: code.location });
+          } else {
+            const dict = CONTENT_LOCALIZATION[currentUiLang] || CONTENT_LOCALIZATION.vi;
+            resolve({ success: false, error: dict.qrNoFound });
+          }
+        } catch (err) {
+          reject(err);
+        }
+      };
+      img.onerror = () => reject(new Error('Không thể tải ảnh để quét QR.'));
+      img.src = base64Data;
+    });
+  }
+
+  function autoDecodeQrFromImage(base64Data) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d', { willReadFrequently: true });
+          ctx.drawImage(img, 0, 0);
+
+          const imgData = ctx.getImageData(0, 0, img.width, img.height);
+          let code = null;
+          if (typeof jsQR !== 'undefined') {
+            code = jsQR(imgData.data, imgData.width, imgData.height, { inversionAttempts: 'dontInvert' }) ||
+                   jsQR(imgData.data, imgData.width, imgData.height, { inversionAttempts: 'attemptBoth' });
+          }
+
+          if (code && code.data) {
+            resolve({ success: true, codes: [{ text: code.data, location: code.location }] });
+          } else {
+            const dict = CONTENT_LOCALIZATION[currentUiLang] || CONTENT_LOCALIZATION.vi;
+            resolve({ success: false, error: dict.qrAutoNoFound });
+          }
+        } catch (err) {
+          reject(err);
+        }
+      };
+      img.onerror = () => reject(new Error('Không thể tải ảnh màn hình để quét QR.'));
+      img.src = base64Data;
+    });
+  }
+
+  function renderQrResult(text, rect, pageScrollX = 0, pageScrollY = 0) {
+    clearTranslation();
+    const dict = CONTENT_LOCALIZATION[currentUiLang] || CONTENT_LOCALIZATION.vi;
+
+    translationContainer = document.createElement('div');
+    translationContainer.className = 'gst-translation-container';
+    appendToActiveContainer(translationContainer);
+
+    const qrBox = document.createElement('div');
+    qrBox.className = 'gst-qr-result-card';
+
+    const boxLeft = pageScrollX + (rect ? rect.x : window.innerWidth / 2 - 160);
+    const boxTop = pageScrollY + (rect ? rect.y : 100);
+    const safeLeft = Math.max(pageScrollX + 10, Math.min(boxLeft, pageScrollX + window.innerWidth - 360));
+
+    qrBox.style.position = 'absolute';
+    qrBox.style.left = safeLeft + 'px';
+    qrBox.style.top = boxTop + 'px';
+    qrBox.style.zIndex = '2147483647';
+
+    const rawText = text ? text.trim() : '';
+    const isUrl = /^https?:\/\/[^\s]+|^www\.[^\s]+/i.test(rawText);
+    const cleanUrl = rawText.startsWith('www.') ? 'https://' + rawText : rawText;
+
+    qrBox.innerHTML = `
+      <div class="gst-qr-header">
+        <div class="gst-qr-header-left">
+          <div class="gst-qr-icon-badge">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#a1a1aa" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+              <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+              <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+              <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+            </svg>
+          </div>
+          <span class="gst-qr-header-title">${escapeHtml(dict.qrResultTitle || 'Mã QR đã quét')}</span>
+        </div>
+        <button class="gst-qr-close-btn" title="Đóng">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="gst-qr-body-text">${escapeHtml(rawText)}</div>
+      <div class="gst-qr-actions">
+        <button class="gst-qr-btn gst-qr-copy-btn">${escapeHtml(dict.copyText || 'Sao chép')}</button>
+        ${isUrl ? `<a href="${escapeHtml(cleanUrl)}" target="_blank" class="gst-qr-btn gst-qr-open-btn">${escapeHtml(dict.openLink || 'Mở liên kết')}</a>` : ''}
+      </div>
+    `;
+
+    const closeBtn = qrBox.querySelector('.gst-qr-close-btn');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        clearTranslation();
+      });
+    }
+
+    const copyBtn = qrBox.querySelector('.gst-qr-copy-btn');
+    if (copyBtn) {
+      copyBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        navigator.clipboard.writeText(rawText).then(() => {
+          copyBtn.textContent = dict.copySuccess || 'Đã chép!';
+          setTimeout(() => {
+            copyBtn.textContent = dict.copyText || 'Sao chép';
+          }, 1500);
+        });
+      });
+    }
+
+    const headerEl = qrBox.querySelector('.gst-qr-header');
+    makeElementDraggable(qrBox, headerEl || qrBox);
+    translationContainer.appendChild(qrBox);
+
+    activeDocumentClickListener = (e) => {
+      if (e.target.closest('.gst-qr-result-card')) return;
+      clearTranslation();
+    };
+
+    setTimeout(() => {
+      if (translationContainer) {
+        document.addEventListener('mousedown', activeDocumentClickListener);
+      }
+    }, 50);
+  }
+
+  function renderMultipleQrResults(codes, pageScrollX = 0, pageScrollY = 0) {
+    if (!codes || codes.length === 0) return;
+    const dpr = window.devicePixelRatio || 1;
+    codes.forEach(code => {
+      let rect = null;
+      if (code.location && code.location.topLeftCorner) {
+        rect = {
+          x: Math.round(code.location.topLeftCorner.x / dpr),
+          y: Math.round(code.location.topLeftCorner.y / dpr),
+          w: 280,
+          h: 120
+        };
+      }
+      renderQrResult(code.text, rect, pageScrollX, pageScrollY);
+    });
   }
 
   function showToastError(errorMsg) {

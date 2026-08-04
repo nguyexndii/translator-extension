@@ -865,10 +865,14 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 });
 
 // Helper to save translations to local storage (max 100, FIFO, no duplicate consecutive entries)
-function addToHistory(original, translated, sourceLang, targetLang, contextType = null, detectedSource = null) {
+function addToHistory(original, translated, sourceLang, targetLang, contextType = null, detectedAppSource = null) {
   if (!original || !translated) return;
   const originalClean = original.trim();
   const translatedClean = translated.trim();
+
+  // sourceLang MUST be the language name/code (e.g. "English", "Japanese", "Vietnamese").
+  // Never replace sourceLang with app name like "YouTube" or "Chrome"!
+  let cleanSourceLang = (sourceLang && sourceLang.toLowerCase() !== 'auto') ? sourceLang : 'English';
 
   chrome.storage.local.get(['translationHistory'], (result) => {
     let history = result.translationHistory || [];
@@ -885,10 +889,10 @@ function addToHistory(original, translated, sourceLang, targetLang, contextType 
       id: Date.now() + '-' + Math.random().toString(36).substr(2, 9),
       original: originalClean,
       translated: translatedClean,
-      sourceLang: sourceLang || 'Auto',
+      sourceLang: cleanSourceLang,
       targetLang: targetLang || 'Vietnamese',
       contextType: contextType || null,
-      detectedSource: detectedSource || null,
+      detectedAppSource: detectedAppSource || null,
       timestamp: Date.now()
     };
     
@@ -1245,15 +1249,15 @@ async function handleAutoQrScan(tabId) {
     const storage = await new Promise((resolve) => {
       chrome.storage.local.get(['uiLang'], (result) => resolve(result));
     });
-    const uiLang = storage.uiLang || 'en';
+    const uiLang = storage.uiLang || 'vi';
     const loadingText = uiLang === 'en' ? 'Scanning screen for QR...' : 'Đang quét QR trên màn hình...';
 
-    chrome.tabs.sendMessage(tabId, { action: 'show-loading', text: loadingText });
+    chrome.tabs.sendMessage(tabId, { action: 'show-loading', text: loadingText, uiLang: uiLang });
 
     if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
 
-    // Wait 300ms for popup to close completely and page to redraw
-    await new Promise((resolve) => setTimeout(resolve, 150));
+    // Wait 80ms for popup to close completely and page to redraw
+    await new Promise((resolve) => setTimeout(resolve, 80));
 
     if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
 
@@ -1268,19 +1272,20 @@ async function handleAutoQrScan(tabId) {
     // Send full screen screenshot to content script to decode automatically
     chrome.tabs.sendMessage(tabId, {
       action: 'auto-decode-qr',
-      base64Data: fullScreenshotBase64
+      base64Data: fullScreenshotBase64,
+      uiLang: uiLang
     }, (response) => {
       try {
         if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
 
         if (!response) {
           const errNoResp = uiLang === 'en' ? 'Failed to communicate with the webpage.' : 'Không thể kết nối với trang web.';
-          chrome.tabs.sendMessage(tabId, { action: 'show-error', error: errNoResp });
+          chrome.tabs.sendMessage(tabId, { action: 'show-error', error: errNoResp, uiLang: uiLang });
           return;
         }
 
         if (response.error) {
-          chrome.tabs.sendMessage(tabId, { action: 'show-error', error: response.error });
+          chrome.tabs.sendMessage(tabId, { action: 'show-error', error: response.error, uiLang: uiLang });
           return;
         }
 
@@ -1296,7 +1301,8 @@ async function handleAutoQrScan(tabId) {
             codes: qrResult.codes,
             devicePixelRatio: qrResult.devicePixelRatio || 1,
             pageScrollX: qrResult.pageScrollX || 0,
-            pageScrollY: qrResult.pageScrollY || 0
+            pageScrollY: qrResult.pageScrollY || 0,
+            uiLang: uiLang
           });
         } else {
           // Automatic scanning failed to find a QR code.
@@ -1305,7 +1311,7 @@ async function handleAutoQrScan(tabId) {
             ? 'No QR found automatically. Please draw a box to scan.' 
             : 'Không tìm thấy QR tự động. Hãy vẽ vùng chọn chứa mã QR!';
           
-          chrome.tabs.sendMessage(tabId, { action: 'show-error', error: noticeMsg });
+          chrome.tabs.sendMessage(tabId, { action: 'show-error', error: noticeMsg, uiLang: uiLang });
           
           // Wait 2s for the toast to be readable, then start selection mode
           setTimeout(() => {
@@ -1314,7 +1320,7 @@ async function handleAutoQrScan(tabId) {
         }
       } catch (err) {
         if (err.name === 'AbortError') return;
-        chrome.tabs.sendMessage(tabId, { action: 'show-error', error: err.message });
+        chrome.tabs.sendMessage(tabId, { action: 'show-error', error: err.message, uiLang: uiLang });
       } finally {
         clearController(tabId, controller);
       }

@@ -104,10 +104,27 @@ const LANGUAGE_MAP = {
 };
 
 function getFullLanguageName(langName, uiLang) {
-  if (!langName) return uiLang === 'vi' ? 'Tự động' : 'Auto';
+  if (!langName || langName.trim().toLowerCase() === 'auto') {
+    return uiLang === 'vi' ? 'Tiếng Anh' : 'English';
+  }
   const cleanName = langName.trim().toLowerCase();
+  
+  // Filter out non-language app/context names that might have been saved in past history items
+  const nonLanguageKeywords = ['youtube', 'chrome', 'google chrome', 'pdf', 'website', 'software_ui', 'game', 'app'];
+  if (nonLanguageKeywords.includes(cleanName)) {
+    return uiLang === 'vi' ? 'Tiếng Anh' : 'English';
+  }
+
+  if (cleanName === 'en' || cleanName === 'english') return uiLang === 'vi' ? 'Tiếng Anh' : 'English';
+  if (cleanName === 'vi' || cleanName === 'vietnamese') return uiLang === 'vi' ? 'Tiếng Việt' : 'Vietnamese';
+  if (cleanName === 'ja' || cleanName === 'japanese') return uiLang === 'vi' ? 'Tiếng Nhật' : 'Japanese';
+  if (cleanName === 'ko' || cleanName === 'korean') return uiLang === 'vi' ? 'Tiếng Hàn' : 'Korean';
+  if (cleanName === 'zh' || cleanName === 'chinese') return uiLang === 'vi' ? 'Tiếng Trung' : 'Chinese';
+  if (cleanName === 'fr' || cleanName === 'french') return uiLang === 'vi' ? 'Tiếng Pháp' : 'French';
+  if (cleanName === 'de' || cleanName === 'german') return uiLang === 'vi' ? 'Tiếng Đức' : 'German';
+  if (cleanName === 'es' || cleanName === 'spanish') return uiLang === 'vi' ? 'Tiếng Tây Ban Nha' : 'Spanish';
   if (uiLang === 'vi') {
-    return LANGUAGE_MAP[cleanName] || langName.charAt(0).toUpperCase() + langName.slice(1);
+    return LANGUAGE_MAP[cleanName] || (langName.charAt(0).toUpperCase() + langName.slice(1));
   }
   return langName.charAt(0).toUpperCase() + langName.slice(1);
 }
