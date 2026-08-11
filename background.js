@@ -3,6 +3,15 @@ const GEMINI_MODELS = [
   'gemini-3.1-flash-lite'
 ];
 
+// Quy tắc chất lượng dịch dùng chung cho TẤT CẢ các chức năng dịch
+// (khoanh chụp màn hình, bôi đen text, dịch text từ popup, dịch ảnh từ popup)
+const TRANSLATION_QUALITY_RULES = `
+Dịch theo NGHĨA và Ý ĐỊNH giao tiếp thật của câu, TUYỆT ĐỐI không dịch word-by-word/máy móc. Văn phong phải tự nhiên như người Việt bản xứ nói chuyện — đặc biệt với chat/tin nhắn/phụ đề thì dùng khẩu ngữ đời thường, không dịch kiểu văn viết trang trọng cứng nhắc.
+
+Giữ đúng LOẠI CÂU của bản gốc: nếu là câu hỏi → dịch ra câu hỏi (kể cả câu hỏi rút gọn không có dấu "?"); nếu là câu đang gõ dở/chưa hoàn chỉnh → dịch giữ nguyên trạng thái dở dang, không tự ý biến thành cụm danh từ hay câu hoàn chỉnh khác nghĩa.
+
+Nếu là nội dung game: giữ nguyên tên riêng (nhân vật, địa danh), thuật ngữ hệ thống (skill, item, currency) và từ mượn quen thuộc cộng đồng (boss, combo, gacha...) — trừ khi có bản Việt hóa chính thức phổ biến.`.trim();
+
 // Glossary Cache Helper Functions
 async function getGlossaryEntry(key) {
   if (!key) return null;
@@ -537,9 +546,8 @@ async function executeGeminiImageTranslation(tabId, croppedBase64, rect, context
 
 QUY TẮC DỊCH:
 1. Dịch chuẩn xác, tự nhiên, đúng ngữ cảnh (Game UI, Web UI, Bài viết, Chat, Meme, hoặc Phụ đề phim).
+${TRANSLATION_QUALITY_RULES}
 2. Giữ nguyên tên riêng, phím tắt, hằng số & thuật ngữ kỹ thuật/game.
-2b. Dịch theo NGHĨA và Ý ĐỊNH giao tiếp thật của câu, TUYỆT ĐỐI không dịch word-by-word/máy móc. Văn phong phải tự nhiên như người Việt bản xứ nói chuyện — đặc biệt với chat/tin nhắn/phụ đề thì dùng khẩu ngữ đời thường, không dịch kiểu văn viết trang trọng cứng nhắc.
-2c. Giữ đúng LOẠI CÂU của bản gốc: nếu là câu hỏi → dịch ra câu hỏi (kể cả câu hỏi rút gọn không có dấu "?"); nếu là câu đang gõ dở/chưa hoàn chỉnh (input chưa gửi) → dịch giữ nguyên trạng thái dở dang, không tự ý biến thành cụm danh từ hay câu hoàn chỉnh khác nghĩa.
 3. Quy tắc tách/gom phần tử trong mảng translations:
    - Nếu ảnh chứa danh sách các MỤC MENU, LỰA CHỌN, NHÃN UI riêng lẻ (ví dụ: Appearance / Hide / Text / Small / Standard...) → mỗi mục là 1 phần tử RIÊNG trong mảng.
    - Nếu ảnh chứa VĂN BẢN, ĐỀ MỤC, CÂU CHẠY LIÊN TIẾP (kể cả nhiều dòng xuống hàng) → gom thành 1 phần tử duy nhất trong mảng, dịch tự nhiên.
@@ -686,7 +694,7 @@ async function handleTextSelectionAndTranslation(tabId, selectedText, rect, cont
 
 Trước khi dịch, xác định ngữ cảnh dựa trên metadata trang web (domain, tiêu đề trang) và nội dung của chính đoạn text: đây là bài viết, UI phần mềm, đoạn chat, hội thoại/cốt truyện game, hay loại khác. Nếu nội dung thuộc về 1 game/app cụ thể mà bạn nhận ra tên, ghi vào detected_source.
 
-Nếu là nội dung game: giữ nguyên tên riêng (nhân vật, địa danh), thuật ngữ hệ thống (skill, item, currency trong game) và các từ mượn quen thuộc với cộng đồng (boss, combo, gacha...) — trừ khi có bản Việt hóa chính thức phổ biến.
+${TRANSLATION_QUALITY_RULES}
 
 Trả về JSON đúng schema, không thêm text khác:
 {
@@ -1006,7 +1014,7 @@ async function handleTextTranslationFromPopup(rawText, targetLang, popupDomain, 
 
 Xác định ngữ cảnh nội dung dựa trên chính văn bản: đây là bài viết, UI phần mềm, đoạn chat, hội thoại/cốt truyện game hay loại khác. Nếu nhận ra đây là nội dung từ 1 game/app cụ thể, ghi vào detected_source.
 
-Nếu là nội dung game: giữ nguyên tên riêng, thuật ngữ hệ thống (skill, item, currency) và từ mượn quen thuộc cộng đồng — trừ khi có bản Việt hóa chính thức phổ biến.
+${TRANSLATION_QUALITY_RULES}
 
 Trả về JSON đúng schema, không thêm text khác:
 {
@@ -1114,7 +1122,7 @@ QUY TẮC BẮT BUỘC:
 
 Trước khi dịch, xác định ngữ cảnh dựa trên dấu hiệu hình ảnh (HUD, thanh máu, icon vật phẩm, khung hội thoại, bố cục menu, font chữ, logo phần mềm...): đây là game, phần mềm/UI, bài viết, đoạn chat, phụ đề, hay loại khác. Nếu nhận ra tên game/app cụ thể, ghi vào detected_source.
 
-Nếu là nội dung game: giữ nguyên tên riêng, thuật ngữ hệ thống (skill, item, currency), từ mượn quen thuộc cộng đồng (boss, combo, gacha...) — trừ khi có bản Việt hóa chính thức phổ biến.
+${TRANSLATION_QUALITY_RULES}
 
 Trả về JSON đúng schema, không thêm text khác:
 {
