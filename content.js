@@ -18,11 +18,15 @@
   let loadingOverlay = null;
   let translationContainer = null;
   let currentUiLang = 'vi'; // default UI language to Vietnamese
+  let overlayFontSize = 13;
 
   try {
-    chrome.storage.local.get(['uiLang'], (res) => {
+    chrome.storage.local.get(['uiLang', 'overlayFontSize'], (res) => {
       if (res && res.uiLang) {
         currentUiLang = res.uiLang;
+      }
+      if (res && res.overlayFontSize) {
+        overlayFontSize = res.overlayFontSize;
       }
     });
   } catch (e) {}
@@ -853,13 +857,25 @@
     }
 
     const items = data.translations
-      .map(t => (t.translated_text || '').trim())
-      .filter(Boolean);
+      .map(t => ({
+        text: (t.translated_text || '').trim(),
+        bbox: t.bbox || null
+      }))
+      .filter(it => it.text);
 
     if (items.length === 0) {
       showToastError(dict.noTextFound);
       clearTranslation();
       return;
+    }
+
+    // Helper: convert normalised bbox (0-1000) to absolute page coords
+    function bboxToPageRect(bbox) {
+      const bx = boxLeft + (bbox.x / 1000) * rect.w;
+      const by = boxTop  + (bbox.y / 1000) * rect.h;
+      const bw = Math.max((bbox.w / 1000) * rect.w, 24);
+      const bh = Math.max((bbox.h / 1000) * rect.h, 18);
+      return { left: bx, top: by, width: bw, height: bh };
     }
 
     const boxLeft = pageScrollX + rect.x;
@@ -872,7 +888,7 @@
       block.style.whiteSpace   = 'pre-wrap';
       block.style.wordBreak    = 'break-word';
       block.style.overflowWrap = 'break-word';
-      block.style.fontSize     = '13px';
+      block.style.fontSize     = overlayFontSize + 'px';
       block.style.lineHeight   = '1.45';
 
       const span = document.createElement('span');
@@ -892,7 +908,7 @@
       // ── BÔI ĐEN ──────────────────────────────────────────────────────────
       // ONE block directly BELOW the highlighted text.
       // Width is clamped to selection width so text flows in wide horizontal lines.
-      const consolidatedText = items.join('\n\n');
+      const consolidatedText = items.map(it => it.text).join('\n\n');
 
       const block = makeBlock(consolidatedText);
       block.classList.add('gst-text-block');
@@ -914,55 +930,31 @@
       translationContainer.appendChild(block);
 
     } else {
-      // ── KHOANH VÙNG ──────────────────────────────────────────────────────
-
-      if (items.length === 1) {
-        // ── ĐƠN (đoạn văn / 1 phần tử) ──────────────────────────────────
-        // One block covering EXACTLY the crop area (same width, same top-left).
-        const targetW  = Math.max(rect.w, 60);
-        const safeLeft = Math.max(pageScrollX + 10, Math.min(boxLeft, pageScrollX + window.innerWidth - targetW - 15));
-
-        const block = makeBlock(items[0]);
+      // ── KHOANH VÙNG ── đặt từng khối đúng vị trí thật của text gốc
+      items.forEach((item) => {
+        const block = makeBlock(item.text);
         block.style.position  = 'absolute';
-        block.style.left      = safeLeft + 'px';
-        block.style.top       = boxTop + 'px';
-        block.style.setProperty('width',     targetW + 'px', 'important');
-        block.style.setProperty('max-width', targetW + 'px', 'important');
-        block.style.height    = 'auto';
-        block.style.padding   = '8px 12px';
         block.style.boxSizing = 'border-box';
+        block.style.padding   = '4px 7px';
+
+        if (item.bbox) {
+          const r = bboxToPageRect(item.bbox);
+          const safeLeft = Math.max(pageScrollX + 10, Math.min(r.left, pageScrollX + window.innerWidth - r.width - 15));
+          block.style.left      = safeLeft + 'px';
+          block.style.top       = r.top + 'px';
+          block.style.setProperty('width', r.width + 'px', 'important');
+          block.style.height    = 'auto';
+          block.style.minHeight = r.height + 'px';
+        } else {
+          // fallback: Gemini không trả bbox (hiếm) → phủ cả vùng crop
+          block.style.left = boxLeft + 'px';
+          block.style.top  = boxTop + 'px';
+          block.style.setProperty('width', Math.max(rect.w, 60) + 'px', 'important');
+          block.style.height = 'auto';
+        }
 
         translationContainer.appendChild(block);
-
-      } else {
-        // ── NHIỀU (menu / lựa chọn) ──────────────────────────────────────
-        // Each item = separate box overlaid on the corresponding menu row.
-        // Stacked top-to-bottom from the crop top; width = fit-content (hugs text).
-        const cropMaxW = Math.max(Math.min(rect.w, window.innerWidth - rect.x - 10), 60);
-        const safeLeft = Math.max(pageScrollX + 10, Math.min(boxLeft, pageScrollX + window.innerWidth - cropMaxW - 15));
-
-        let currentY = boxTop;
-
-        items.forEach((text) => {
-          const block = makeBlock(text);
-          block.style.position  = 'absolute';
-          block.style.left      = safeLeft + 'px';
-          block.style.top       = currentY + 'px';
-          // Width: shrink to text, cap at crop width
-          block.style.width     = 'fit-content';
-          block.style.minWidth  = '0';
-          block.style.maxWidth  = cropMaxW + 'px';
-          block.style.height    = 'auto';
-          block.style.padding   = '5px 9px';
-          block.style.boxSizing = 'border-box';
-
-          translationContainer.appendChild(block);
-
-          // Measure actual rendered height → stack next box flush below this one
-          const h = block.offsetHeight || 26;
-          currentY += h + 3;
-        });
-      }
+      });
     }
 
     activeDocumentClickListener = (e) => {

@@ -542,8 +542,9 @@ QUY TẮC DỊCH:
    - Nếu ảnh chứa danh sách các MỤC MENU, LỰA CHỌN, NHÃN UI riêng lẻ (ví dụ: Appearance / Hide / Text / Small / Standard...) → mỗi mục là 1 phần tử RIÊNG trong mảng.
    - Nếu ảnh chứa VĂN BẢN, ĐỀ MỤC, CÂU CHẠY LIÊN TIẾP (kể cả nhiều dòng xuống hàng) → gom thành 1 phần tử duy nhất trong mảng, dịch tự nhiên.
    - Nếu có VỪA tiêu đề VỪA đoạn riêng biệt → mỗi đoạn riêng biệt là 1 phần tử.
+4. BẮT BUỘC: với MỖI phần tử trong "translations", phải trả thêm "bbox" là toạ độ khung bao SÁT (tight bounding box) quanh đúng vùng chứa text GỐC đó trong ảnh, dùng hệ toạ độ chuẩn hoá 0-1000 theo cả chiều ngang và dọc của ảnh crop (0,0 là góc trên-trái, 1000,1000 là góc dưới-phải). Không được đoán chung chung — phải bám sát rìa chữ thật.
 
-Trả về JSON ngắn gọn đúng schema:
+Trả về JSON đúng schema:
 {
   "context_type": "software_ui" | "game" | "web_article" | "chat" | "subtitle" | "other",
   "detected_source": "tên game/app/website nếu biết, hoặc null",
@@ -551,11 +552,12 @@ Trả về JSON ngắn gọn đúng schema:
   "translations": [
     {
       "original_text": "text gốc",
-      "translated_text": "text đã dịch"
+      "translated_text": "text đã dịch",
+      "bbox": { "x": 0, "y": 0, "w": 0, "h": 0 }
     }
   ]
 }
-Ghi chú: Menu/lựa chọn riêng lẻ → tách từng phần tử. Đoạn văn liền mạch → gom 1 phần tử.${contextPrompt}${glossaryPrompt}`;
+Ghi chú: Menu/lựa chọn riêng lẻ → tách từng phần tử, mỗi phần tử 1 bbox riêng sát với vị trí thật. Đoạn văn liền mạch → gom 1 phần tử, bbox bao trọn cả đoạn.${contextPrompt}${glossaryPrompt}`;
 
   const payload = {
     contents: [

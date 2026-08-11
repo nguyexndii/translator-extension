@@ -427,7 +427,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Load configuration
-  chrome.storage.local.get(['apiKeys', 'apiKey1', 'apiKey2', 'targetLang', 'uiLang', 'theme'], (result) => {
+  chrome.storage.local.get(['apiKeys', 'apiKey1', 'apiKey2', 'targetLang', 'uiLang', 'theme', 'overlayFontSize'], (result) => {
     let apiKeys = result.apiKeys || [];
     
     // Migrate old keys to new array format if empty
@@ -455,6 +455,20 @@ document.addEventListener('DOMContentLoaded', () => {
       document.documentElement.classList.add('light-mode');
     } else {
       document.documentElement.classList.remove('light-mode');
+    }
+
+    // Overlay font size
+    const overlayFontSizeEl = document.getElementById('overlayFontSize');
+    const overlayFontSizeValueEl = document.getElementById('overlayFontSizeValue');
+    if (overlayFontSizeEl && overlayFontSizeValueEl) {
+      const savedFontSize = result.overlayFontSize || 13;
+      overlayFontSizeEl.value = savedFontSize;
+      overlayFontSizeValueEl.textContent = savedFontSize + 'px';
+      overlayFontSizeEl.addEventListener('input', (e) => {
+        const v = e.target.value;
+        overlayFontSizeValueEl.textContent = v + 'px';
+        chrome.storage.local.set({ overlayFontSize: parseInt(v, 10) });
+      });
     }
 
     // UI Language setup
