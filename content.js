@@ -939,21 +939,40 @@
 
         if (item.bbox) {
           const r = bboxToPageRect(item.bbox);
-          const safeLeft = Math.max(pageScrollX + 10, Math.min(r.left, pageScrollX + window.innerWidth - r.width - 15));
-          block.style.left      = safeLeft + 'px';
-          block.style.top       = r.top + 'px';
-          block.style.setProperty('width', r.width + 'px', 'important');
+
+          // width tối thiểu = đúng bbox gốc, tối đa = nới rộng nhưng KHÔNG vượt viewport
+          const minW = r.width;
+          const maxW = Math.min(window.innerWidth - 40, Math.max(minW * 2.4, 260));
+
+          block.style.width     = 'max-content';
+          block.style.minWidth  = minW + 'px';
+          block.style.maxWidth  = maxW + 'px';
           block.style.height    = 'auto';
           block.style.minHeight = r.height + 'px';
+
+          translationContainer.appendChild(block); // append trước để đo offsetWidth/Height thật
+
+          const actualW = block.offsetWidth;
+          // Clamp left để khung không lòi ra khỏi 2 mép màn hình (trái/phải)
+          const safeLeft = Math.max(
+            pageScrollX + 10,
+            Math.min(r.left, pageScrollX + window.innerWidth - actualW - 15)
+          );
+          // Clamp top để không lòi khỏi mép trên/dưới màn hình đang hiển thị
+          const viewTop    = pageScrollY + 10;
+          const viewBottom = pageScrollY + window.innerHeight - block.offsetHeight - 10;
+          const safeTop    = Math.max(viewTop, Math.min(r.top, Math.max(viewTop, viewBottom)));
+
+          block.style.left = safeLeft + 'px';
+          block.style.top  = safeTop + 'px';
         } else {
           // fallback: Gemini không trả bbox (hiếm) → phủ cả vùng crop
           block.style.left = boxLeft + 'px';
           block.style.top  = boxTop + 'px';
           block.style.setProperty('width', Math.max(rect.w, 60) + 'px', 'important');
           block.style.height = 'auto';
+          translationContainer.appendChild(block);
         }
-
-        translationContainer.appendChild(block);
       });
     }
 

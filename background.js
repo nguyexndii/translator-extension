@@ -538,6 +538,8 @@ async function executeGeminiImageTranslation(tabId, croppedBase64, rect, context
 QUY TẮC DỊCH:
 1. Dịch chuẩn xác, tự nhiên, đúng ngữ cảnh (Game UI, Web UI, Bài viết, Chat, Meme, hoặc Phụ đề phim).
 2. Giữ nguyên tên riêng, phím tắt, hằng số & thuật ngữ kỹ thuật/game.
+2b. Dịch theo NGHĨA và Ý ĐỊNH giao tiếp thật của câu, TUYỆT ĐỐI không dịch word-by-word/máy móc. Văn phong phải tự nhiên như người Việt bản xứ nói chuyện — đặc biệt với chat/tin nhắn/phụ đề thì dùng khẩu ngữ đời thường, không dịch kiểu văn viết trang trọng cứng nhắc.
+2c. Giữ đúng LOẠI CÂU của bản gốc: nếu là câu hỏi → dịch ra câu hỏi (kể cả câu hỏi rút gọn không có dấu "?"); nếu là câu đang gõ dở/chưa hoàn chỉnh (input chưa gửi) → dịch giữ nguyên trạng thái dở dang, không tự ý biến thành cụm danh từ hay câu hoàn chỉnh khác nghĩa.
 3. Quy tắc tách/gom phần tử trong mảng translations:
    - Nếu ảnh chứa danh sách các MỤC MENU, LỰA CHỌN, NHÃN UI riêng lẻ (ví dụ: Appearance / Hide / Text / Small / Standard...) → mỗi mục là 1 phần tử RIÊNG trong mảng.
    - Nếu ảnh chứa VĂN BẢN, ĐỀ MỤC, CÂU CHẠY LIÊN TIẾP (kể cả nhiều dòng xuống hàng) → gom thành 1 phần tử duy nhất trong mảng, dịch tự nhiên.
