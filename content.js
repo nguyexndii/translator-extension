@@ -73,7 +73,7 @@
   }
 
   function resumeAutoPausedVideo() {
-    // Remove replay prevention listeners
+    // Remove replay prevention listeners so user can manually resume video playback whenever ready
     preventReplayListeners.forEach(item => {
       try {
         item.video.removeEventListener('play', item.listener, true);
@@ -81,15 +81,7 @@
       } catch (e) {}
     });
     preventReplayListeners = [];
-
-    if (Array.isArray(autoPausedVideos) && autoPausedVideos.length > 0) {
-      autoPausedVideos.forEach(v => {
-        try {
-          v.play().catch(() => {});
-        } catch (e) {}
-      });
-      autoPausedVideos = [];
-    }
+    autoPausedVideos = [];
   }
 
   // Robustly append overlay to active container (handles HTML5 Fullscreen mode and windowed mode)
@@ -151,7 +143,8 @@
       qrAutoNoFound: 'Không tìm thấy mã QR trên màn hình. Hãy kéo chọn vùng chứa mã QR!',
       copySuccess: 'Đã chép!',
       openLink: 'Mở liên kết',
-      copyText: 'Sao chép'
+      copyText: 'Sao chép',
+      areaCardTitle: 'Kết quả khoanh dịch'
     },
     en: {
       helperText: 'Drag mouse to select screen region to translate',
@@ -172,7 +165,8 @@
       qrAutoNoFound: 'No QR code found on screen. Please draw a box around the QR code!',
       copySuccess: 'Copied!',
       openLink: 'Open Link',
-      copyText: 'Copy'
+      copyText: 'Copy',
+      areaCardTitle: 'Area Translation'
     }
   };
 
@@ -858,80 +852,118 @@
       return;
     }
 
-    let consolidatedText = data.translations
+    const items = data.translations
       .map(t => (t.translated_text || '').trim())
-      .filter(Boolean)
-      .join('\n\n');
+      .filter(Boolean);
 
-    if (!consolidatedText.trim()) {
+    if (items.length === 0) {
       showToastError(dict.noTextFound);
       clearTranslation();
       return;
     }
 
-    const block = document.createElement('div');
-    block.className = 'gst-translation-block';
-    if (isText) {
-      block.classList.add('gst-text-block');
-    }
-
     const boxLeft = pageScrollX + rect.x;
-    const boxTop = pageScrollY + rect.y;
+    const boxTop  = pageScrollY + rect.y;
 
-    if (isText) {
-      const selWidth = rect.w > 0 ? rect.w : 420;
-      const maxBoxWidth = Math.min(Math.max(selWidth, 300), window.innerWidth - 40);
-      block.style.display = 'block';
-      block.style.width = 'max-content';
-      block.style.minWidth = '240px';
-      block.style.maxWidth = Math.min(window.innerWidth - 40, 650) + 'px';
-      block.style.height = 'auto';
-      block.style.minHeight = '28px';
+    // Helper: build and wire up a dark block
+    function makeBlock(text) {
+      const block = document.createElement('div');
+      block.className = 'gst-translation-block';
+      block.style.whiteSpace   = 'pre-wrap';
+      block.style.wordBreak    = 'break-word';
+      block.style.overflowWrap = 'break-word';
+      block.style.fontSize     = '13px';
+      block.style.lineHeight   = '1.45';
 
-      const maxLeft = pageScrollX + window.innerWidth - maxBoxWidth - 15;
-      const safeLeft = Math.max(pageScrollX + 10, Math.min(boxLeft, maxLeft));
+      const span = document.createElement('span');
+      span.textContent = text;
+      block.appendChild(span);
 
-      block.style.left = safeLeft + 'px';
-      block.style.top = (boxTop + rect.h + 6) + 'px';
-    } else {
-      // Area selection (Khoanh dịch): Match the EXACT width and top-left position of the user's cropped box
-      const targetW = Math.max(rect.w, 60);
-      const safeLeft = Math.max(pageScrollX + 10, Math.min(boxLeft, pageScrollX + window.innerWidth - targetW - 15));
-
-      block.style.display = 'block';
-      block.style.position = 'absolute';
-      block.style.left = safeLeft + 'px';
-      block.style.top = boxTop + 'px';
-      block.style.setProperty('width', targetW + 'px', 'important');
-      block.style.setProperty('max-width', targetW + 'px', 'important');
-      block.style.height = 'auto';
-      block.style.padding = '8px 12px';
-      block.style.boxSizing = 'border-box';
+      makeElementDraggable(block, block);
+      block.addEventListener('click', (e) => {
+        if (block.dataset.dragged === 'true') { block.dataset.dragged = 'false'; return; }
+        block.remove();
+        clearTranslation();
+      });
+      return block;
     }
 
-    block.style.whiteSpace = 'pre-wrap';
-    block.style.wordBreak = 'break-word';
-    block.style.overflowWrap = 'break-word';
-    block.style.fontSize = '13px';
-    block.style.lineHeight = '1.45';
+    if (isText) {
+      // ── BÔI ĐEN ──────────────────────────────────────────────────────────
+      // ONE block directly BELOW the highlighted text.
+      // Width is clamped to selection width so text flows in wide horizontal lines.
+      const consolidatedText = items.join('\n\n');
 
-    const textWrapper = document.createElement('span');
-    textWrapper.textContent = consolidatedText;
+      const block = makeBlock(consolidatedText);
+      block.classList.add('gst-text-block');
 
-    block.appendChild(textWrapper);
+      const selWidth    = rect.w > 0 ? rect.w : 420;
+      const maxBoxWidth = Math.min(Math.max(selWidth, 300), window.innerWidth - 40);
+      const maxLeft     = pageScrollX + window.innerWidth - maxBoxWidth - 15;
+      const safeLeft    = Math.max(pageScrollX + 10, Math.min(boxLeft, maxLeft));
 
-    makeElementDraggable(block, block);
+      block.style.display   = 'block';
+      block.style.width     = 'max-content';
+      block.style.minWidth  = '240px';
+      block.style.maxWidth  = Math.min(window.innerWidth - 40, 650) + 'px';
+      block.style.height    = 'auto';
+      block.style.minHeight = '28px';
+      block.style.left      = safeLeft + 'px';
+      block.style.top       = (boxTop + rect.h + 6) + 'px';
 
-    block.addEventListener('click', (e) => {
-      if (block.dataset.dragged === "true") {
-        block.dataset.dragged = "false";
-        return;
+      translationContainer.appendChild(block);
+
+    } else {
+      // ── KHOANH VÙNG ──────────────────────────────────────────────────────
+
+      if (items.length === 1) {
+        // ── ĐƠN (đoạn văn / 1 phần tử) ──────────────────────────────────
+        // One block covering EXACTLY the crop area (same width, same top-left).
+        const targetW  = Math.max(rect.w, 60);
+        const safeLeft = Math.max(pageScrollX + 10, Math.min(boxLeft, pageScrollX + window.innerWidth - targetW - 15));
+
+        const block = makeBlock(items[0]);
+        block.style.position  = 'absolute';
+        block.style.left      = safeLeft + 'px';
+        block.style.top       = boxTop + 'px';
+        block.style.setProperty('width',     targetW + 'px', 'important');
+        block.style.setProperty('max-width', targetW + 'px', 'important');
+        block.style.height    = 'auto';
+        block.style.padding   = '8px 12px';
+        block.style.boxSizing = 'border-box';
+
+        translationContainer.appendChild(block);
+
+      } else {
+        // ── NHIỀU (menu / lựa chọn) ──────────────────────────────────────
+        // Each item = separate box overlaid on the corresponding menu row.
+        // Stacked top-to-bottom from the crop top; width = fit-content (hugs text).
+        const cropMaxW = Math.max(Math.min(rect.w, window.innerWidth - rect.x - 10), 60);
+        const safeLeft = Math.max(pageScrollX + 10, Math.min(boxLeft, pageScrollX + window.innerWidth - cropMaxW - 15));
+
+        let currentY = boxTop;
+
+        items.forEach((text) => {
+          const block = makeBlock(text);
+          block.style.position  = 'absolute';
+          block.style.left      = safeLeft + 'px';
+          block.style.top       = currentY + 'px';
+          // Width: shrink to text, cap at crop width
+          block.style.width     = 'fit-content';
+          block.style.minWidth  = '0';
+          block.style.maxWidth  = cropMaxW + 'px';
+          block.style.height    = 'auto';
+          block.style.padding   = '5px 9px';
+          block.style.boxSizing = 'border-box';
+
+          translationContainer.appendChild(block);
+
+          // Measure actual rendered height → stack next box flush below this one
+          const h = block.offsetHeight || 26;
+          currentY += h + 3;
+        });
       }
-      block.remove();
-      clearTranslation();
-    });
-
-    translationContainer.appendChild(block);
+    }
 
     activeDocumentClickListener = (e) => {
       if (e.target.closest('.gst-translation-block')) return;

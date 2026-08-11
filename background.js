@@ -538,12 +538,16 @@ async function executeGeminiImageTranslation(tabId, croppedBase64, rect, context
 QUY TẮC DỊCH:
 1. Dịch chuẩn xác, tự nhiên, đúng ngữ cảnh (Game UI, Web UI, Bài viết, Chat, Meme, hoặc Phụ đề phim).
 2. Giữ nguyên tên riêng, phím tắt, hằng số & thuật ngữ kỹ thuật/game.
-3. Gom các câu/dòng văn bản trong ảnh crop thành văn bản hoàn chỉnh, dịch trôi chảy và tự nhiên.
+3. Quy tắc tách/gom phần tử trong mảng translations:
+   - Nếu ảnh chứa danh sách các MỤC MENU, LỰA CHỌN, NHÃN UI riêng lẻ (ví dụ: Appearance / Hide / Text / Small / Standard...) → mỗi mục là 1 phần tử RIÊNG trong mảng.
+   - Nếu ảnh chứa VĂN BẢN, ĐỀ MỤC, CÂU CHẠY LIÊN TIẾP (kể cả nhiều dòng xuống hàng) → gom thành 1 phần tử duy nhất trong mảng, dịch tự nhiên.
+   - Nếu có VỪA tiêu đề VỪA đoạn riêng biệt → mỗi đoạn riêng biệt là 1 phần tử.
 
 Trả về JSON ngắn gọn đúng schema:
 {
   "context_type": "software_ui" | "game" | "web_article" | "chat" | "subtitle" | "other",
   "detected_source": "tên game/app/website nếu biết, hoặc null",
+  "detected_source_language": "tên ngôn ngữ gốc bằng tiếng Anh (ví dụ: Japanese, English, Chinese, Vietnamese...)",
   "translations": [
     {
       "original_text": "text gốc",
@@ -551,7 +555,7 @@ Trả về JSON ngắn gọn đúng schema:
     }
   ]
 }
-Ghi chú: Trả về văn bản đã dịch đầy đủ, ngắn gọn.${contextPrompt}${glossaryPrompt}`;
+Ghi chú: Menu/lựa chọn riêng lẻ → tách từng phần tử. Đoạn văn liền mạch → gom 1 phần tử.${contextPrompt}${glossaryPrompt}`;
 
   const payload = {
     contents: [
@@ -608,7 +612,10 @@ Ghi chú: Trả về văn bản đã dịch đầy đủ, ngắn gọn.${context
       if (data && data.translations && data.translations.length > 0) {
         const combinedOriginal = data.translations.map(t => t.original_text).filter(Boolean).join('\n');
         const combinedTranslated = data.translations.map(t => t.translated_text).filter(Boolean).join('\n');
-        const detectedSourceLang = data.detected_source_language || 'Auto';
+        let detectedSourceLang = data.detected_source_language;
+        if (!detectedSourceLang || detectedSourceLang.toLowerCase() === 'auto') {
+          detectedSourceLang = detectLanguageFromText(combinedOriginal);
+        }
         if (combinedOriginal.trim() && combinedTranslated.trim()) {
           addToHistory(combinedOriginal, combinedTranslated, detectedSourceLang, targetLang, data.context_type, data.detected_source);
         }
@@ -864,6 +871,40 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   }
 });
 
+function detectLanguageFromText(text) {
+  if (!text) return 'Auto';
+  const str = text.trim();
+  // Japanese: Hiragana (\u3040-\u309f) or Katakana (\u30a0-\u30ff)
+  if (/[\u3040-\u309f\u30a0-\u30ff]/.test(str)) {
+    return 'Japanese';
+  }
+  // Korean: Hangul (\uac00-\ud7af, \u1100-\u11ff)
+  if (/[\uac00-\ud7af\u1100-\u11ff]/.test(str)) {
+    return 'Korean';
+  }
+  // Chinese: Hanzi (\u4e00-\u9fff)
+  if (/[\u4e00-\u9fff]/.test(str)) {
+    return 'Chinese';
+  }
+  // Russian / Cyrillic: (\u0400-\u04ff)
+  if (/[\u0400-\u04ff]/.test(str)) {
+    return 'Russian';
+  }
+  // Arabic: (\u0600-\u06ff)
+  if (/[\u0600-\u06ff]/.test(str)) {
+    return 'Arabic';
+  }
+  // Thai: (\u0e00-\u0e7f)
+  if (/[\u0e00-\u0e7f]/.test(str)) {
+    return 'Thai';
+  }
+  // Vietnamese
+  if (/[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ]/i.test(str)) {
+    return 'Vietnamese';
+  }
+  return 'Auto';
+}
+
 // Helper to save translations to local storage (max 100, FIFO, no duplicate consecutive entries)
 function addToHistory(original, translated, sourceLang, targetLang, contextType = null, detectedAppSource = null) {
   if (!original || !translated) return;
@@ -872,7 +913,13 @@ function addToHistory(original, translated, sourceLang, targetLang, contextType 
 
   // sourceLang MUST be the language name/code (e.g. "English", "Japanese", "Vietnamese").
   // Never replace sourceLang with app name like "YouTube" or "Chrome"!
-  let cleanSourceLang = (sourceLang && sourceLang.toLowerCase() !== 'auto') ? sourceLang : 'English';
+  let cleanSourceLang = sourceLang;
+  if (!cleanSourceLang || cleanSourceLang.toLowerCase() === 'auto') {
+    cleanSourceLang = detectLanguageFromText(originalClean);
+  }
+  if (!cleanSourceLang || cleanSourceLang.toLowerCase() === 'auto') {
+    cleanSourceLang = 'Auto';
+  }
 
   chrome.storage.local.get(['translationHistory'], (result) => {
     let history = result.translationHistory || [];

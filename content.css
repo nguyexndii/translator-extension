@@ -44,6 +44,11 @@
   overflow: visible !important;
 }
 
+/* ==========================================================================
+   Translation Block Styling (Minimalist Dark Container with Hover-to-Transparent Dashed Border)
+   ========================================================================== */
+/* Removed duplicate .gst-translation-block definition — canonical definition is below at line 115+ */
+
 .gst-translation-block {
   position: absolute !important;
   pointer-events: auto !important;
@@ -54,22 +59,23 @@
   border-radius: 8px !important;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
   font-weight: 500 !important;
-  line-height: 1.45 !important;
+  font-size: 13.5px !important;
+  line-height: 1.5 !important;
   white-space: pre-wrap !important;
   word-break: normal !important;
   overflow-wrap: break-word !important;
-  width: fit-content !important;
-  max-width: calc(100vw - 40px);
+  /* width/min-width/max-width are set per-block in JS */
   overflow: visible !important;
-  cursor: move !important; /* Visual indicator for dragging */
+  cursor: move !important;
   user-select: text !important;
+  z-index: 2147483647 !important;
   
-  /* GPU acceleration & compositing isolation for ultra-smooth scrolling without stutter */
+  /* GPU acceleration & compositing isolation */
   transform: translateZ(0) !important;
   will-change: transform !important;
   contain: layout style !important;
   
-  /* Modern sleek dark container fitting compactly around text */
+  /* Modern sleek dark container */
   background: rgba(18, 18, 22, 0.94) !important;
   color: #ffffff !important;
   border: 1.5px solid rgba(255, 255, 255, 0.15) !important;
@@ -79,24 +85,16 @@
   transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease !important;
 }
 
-/* Sleek compact popover style for text selection translation blocks */
+/* Text selection popover: distinct gradient + heavier shadow */
 .gst-text-block {
-  background: linear-gradient(135deg, rgba(20, 20, 25, 0.95) 0%, rgba(10, 10, 14, 0.98) 100%) !important;
+  background: linear-gradient(135deg, rgba(20, 20, 25, 0.96) 0%, rgba(10, 10, 14, 0.98) 100%) !important;
   backdrop-filter: blur(16px) saturate(180%) !important;
   -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
   border-radius: 10px !important;
   box-shadow: 0 10px 36px rgba(0, 0, 0, 0.65), inset 0 1px 0 0 rgba(255, 255, 255, 0.14) !important;
   border: 2px solid rgba(255, 255, 255, 0.15) !important;
   padding: 10px 16px !important;
-  display: block !important; /* CRITICAL: block display prevents flex column character-wrap collapse */
-  text-align: left !important;
-  width: auto !important;
-  min-width: 280px !important;
-  max-width: calc(100vw - 40px) !important;
-  white-space: pre-wrap !important;
-  word-break: normal !important;
-  overflow-wrap: break-word !important;
-  line-height: 1.5 !important;
+  line-height: 1.55 !important;
 }
 
 /* Hover-to-transparent effect: Hide text & dark background, disable blur, keep 2px dashed outline border.

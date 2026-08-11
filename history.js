@@ -103,16 +103,29 @@ const LANGUAGE_MAP = {
   'ukrainian': 'Tiếng Ukraina'
 };
 
+function detectLanguageFromText(text) {
+  if (!text) return 'Auto';
+  const str = text.trim();
+  if (/[\u3040-\u309f\u30a0-\u30ff]/.test(str)) return 'Japanese';
+  if (/[\uac00-\ud7af\u1100-\u11ff]/.test(str)) return 'Korean';
+  if (/[\u4e00-\u9fff]/.test(str)) return 'Chinese';
+  if (/[\u0400-\u04ff]/.test(str)) return 'Russian';
+  if (/[\u0600-\u06ff]/.test(str)) return 'Arabic';
+  if (/[\u0e00-\u0e7f]/.test(str)) return 'Thai';
+  if (/[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ]/i.test(str)) return 'Vietnamese';
+  return 'Auto';
+}
+
 function getFullLanguageName(langName, uiLang) {
   if (!langName || langName.trim().toLowerCase() === 'auto') {
-    return uiLang === 'vi' ? 'Tiếng Anh' : 'English';
+    return uiLang === 'vi' ? 'Tự động' : 'Auto';
   }
   const cleanName = langName.trim().toLowerCase();
   
   // Filter out non-language app/context names that might have been saved in past history items
   const nonLanguageKeywords = ['youtube', 'chrome', 'google chrome', 'pdf', 'website', 'software_ui', 'game', 'app'];
   if (nonLanguageKeywords.includes(cleanName)) {
-    return uiLang === 'vi' ? 'Tiếng Anh' : 'English';
+    return uiLang === 'vi' ? 'Tự động' : 'Auto';
   }
 
   if (cleanName === 'en' || cleanName === 'english') return uiLang === 'vi' ? 'Tiếng Anh' : 'English';
@@ -367,7 +380,14 @@ document.addEventListener('DOMContentLoaded', () => {
           itemEl.style.animationDelay = `${staggerIndex * 25}ms`;
         }
         
-        const srcFull = getFullLanguageName(item.sourceLang, currentUiLang);
+        let effectiveSourceLang = item.sourceLang;
+        if (!effectiveSourceLang || effectiveSourceLang.toLowerCase() === 'auto' || effectiveSourceLang.toLowerCase() === 'english' || effectiveSourceLang.toLowerCase() === 'en') {
+          const detected = detectLanguageFromText(item.original);
+          if (detected && detected !== 'Auto') {
+            effectiveSourceLang = detected;
+          }
+        }
+        const srcFull = getFullLanguageName(effectiveSourceLang, currentUiLang);
         const tgtFull = getFullLanguageName(item.targetLang, currentUiLang);
         const formattedTime = item.timestamp ? new Date(item.timestamp).toLocaleString(currentUiLang === 'vi' ? 'vi-VN' : 'en-US') : '';
         
