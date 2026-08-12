@@ -10,7 +10,9 @@ Dịch theo NGHĨA và Ý ĐỊNH giao tiếp thật của câu, TUYỆT ĐỐI 
 
 Giữ đúng LOẠI CÂU của bản gốc: nếu là câu hỏi → dịch ra câu hỏi (kể cả câu hỏi rút gọn không có dấu "?"); nếu là câu đang gõ dở/chưa hoàn chỉnh → dịch giữ nguyên trạng thái dở dang, không tự ý biến thành cụm danh từ hay câu hoàn chỉnh khác nghĩa.
 
-Nếu là nội dung game: giữ nguyên tên riêng (nhân vật, địa danh), thuật ngữ hệ thống (skill, item, currency) và từ mượn quen thuộc cộng đồng (boss, combo, gacha...) — trừ khi có bản Việt hóa chính thức phổ biến.`.trim();
+Nếu là nội dung game: giữ nguyên tên riêng (nhân vật, địa danh), thuật ngữ hệ thống (skill, item, currency) và từ mượn quen thuộc cộng đồng (boss, combo, gacha...) — trừ khi có bản Việt hóa chính thức phổ biến. Quy tắc "giữ nguyên tên riêng" này CHỈ áp dụng cho tên nhân vật/địa danh/thuật ngữ hệ thống BÊN TRONG tác phẩm, KHÔNG áp dụng cho tên/tựa đề của chính tác phẩm đó (xem quy tắc riêng ngay bên dưới).
+
+QUY TẮC DỊCH TÊN/TỰA ĐỀ TÁC PHẨM (phim, anime, manga, tiểu thuyết, game, bài hát...): nếu văn bản cần dịch LÀ tựa đề của một tác phẩm, BẮT BUỘC phải dịch tựa đề đó sang tiếng Việt — TUYỆT ĐỐI không được trả lại y nguyên tiếng Anh/tiếng Nhật/ngôn ngữ gốc, kể cả khi bạn không chắc có bản dịch "chính thức" hay không. Nếu biết tên tiếng Việt phổ biến/chính thức đã được cộng đồng dùng rộng rãi thì ưu tiên dùng tên đó; nếu không chắc, vẫn PHẢI tự dịch ra một cái tên tiếng Việt tự nhiên, hay, sát nghĩa nhất có thể — không được né tránh bằng cách giữ nguyên bản gốc. Ví dụ cụ thể: tựa phim có cả chữ Hán "狼と香辛料" lẫn dòng tiếng Anh "Spice and Wolf" / "MERCHANT MEETS THE WISE WOLF" thì PHẢI dịch ra tiếng Việt kiểu "Sói và Gia Vị" / "Sói và Hương Liệu" — không được giữ nguyên "Spice and Wolf" hay "Merchant Meets the Wise Wolf" dưới bất kỳ hình thức nào. Nếu tựa đề có cả chữ gốc VÀ dòng phụ đề tiếng Anh đi kèm, dịch theo tên chính thức nhận diện được từ chữ gốc, không dịch tách riêng dòng tiếng Anh phụ. Luôn dùng CÙNG MỘT cách dịch nhất quán cho cùng một tên/tựa đề giữa các lần gọi khác nhau.`.trim();
 
 // Glossary Cache Helper Functions
 async function getGlossaryEntry(key) {
@@ -235,6 +237,43 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  // Ảnh đã được content.js chụp thẳng từ khung hình gốc (native resolution) của <video>,
+  // bỏ qua bước chrome.tabs.captureVisibleTab + cắt ảnh vì ảnh này đã đúng vùng cần dịch rồi.
+  if (message.action === 'process-crop-selection-direct-image') {
+    const tabId = sender.tab.id;
+    const rect = message.rect;
+    const context = message.context;
+    const pageScrollX = message.pageScrollX || 0;
+    const pageScrollY = message.pageScrollY || 0;
+
+    (async () => {
+      const controller = registerController(tabId);
+      try {
+        const storage = await new Promise((resolve) => {
+          chrome.storage.local.get(['uiLang'], (result) => resolve(result));
+        });
+        const uiLang = storage.uiLang || 'en';
+        const loadingDichText = uiLang === 'en' ? 'Translating...' : 'Đang dịch...';
+        chrome.tabs.sendMessage(tabId, { action: 'show-loading', text: loadingDichText });
+
+        if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
+
+        await executeGeminiImageTranslation(tabId, message.base64Data, rect, context, uiLang, pageScrollX, pageScrollY, controller);
+      } catch (err) {
+        if (err.name === 'AbortError') {
+          console.log('Direct video-frame translation aborted by user');
+          return;
+        }
+        chrome.tabs.sendMessage(tabId, { action: 'show-error', error: err.message });
+      } finally {
+        clearController(tabId, controller);
+      }
+    })();
+
+    sendResponse({ status: 'processing' });
+    return true;
+  }
+
   if (message.action === 'add-qr-to-history') {
     addQrToHistory(message.type, message.content);
     sendResponse({ status: 'added' });
@@ -367,8 +406,8 @@ async function cropScreenshotInBackground(fullBase64, rect, dpr) {
     const blob = await res.blob();
     const bitmap = await createImageBitmap(blob);
 
-    // Max 500px dimension ensures lightweight ~15KB payload for ultra-fast Gemini Vision processing
-    const maxDim = 500;
+    // Max dimension: cân bằng giữa tốc độ và độ chính xác OCR (chữ nhỏ cần nhiều pixel hơn để đọc đúng)
+    const maxDim = 720;
     let targetW = rect.w;
     let targetH = rect.h;
     if (targetW > maxDim || targetH > maxDim) {
@@ -391,7 +430,7 @@ async function cropScreenshotInBackground(fullBase64, rect, dpr) {
       targetH
     );
 
-    const croppedBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.6 });
+    const croppedBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.85 });
     const arrayBuffer = await croppedBlob.arrayBuffer();
     
     let binary = '';
@@ -427,10 +466,10 @@ async function handleCropAndTranslation(tabId, rect, dpr, context, pageScrollX =
     // Short 60ms delay ensures DOM repaints completely clean screen before capture
     await new Promise(r => setTimeout(r, 60));
 
-    // Capture visible viewport at quality 50 for fast capture
+    // Capture visible viewport ở chất lượng cao hơn để chữ nhỏ không bị vỡ nét khi crop
     const fullScreenshotBase64 = await chrome.tabs.captureVisibleTab(null, {
       format: 'jpeg',
-      quality: 50
+      quality: 80
     });
     const captureTime = performance.now() - tCaptureStart;
 
@@ -547,7 +586,7 @@ async function executeGeminiImageTranslation(tabId, croppedBase64, rect, context
 QUY TẮC DỊCH:
 1. Dịch chuẩn xác, tự nhiên, đúng ngữ cảnh (Game UI, Web UI, Bài viết, Chat, Meme, hoặc Phụ đề phim).
 ${TRANSLATION_QUALITY_RULES}
-2. Giữ nguyên tên riêng, phím tắt, hằng số & thuật ngữ kỹ thuật/game.
+2. Giữ nguyên tên riêng, phím tắt, hằng số & thuật ngữ kỹ thuật/game — KHÔNG áp dụng cho tên/tựa đề phim, anime, series, game, sách (những tựa đề này PHẢI dịch sang tiếng Việt theo đúng quy tắc dịch tựa đề tác phẩm ở trên).
 3. Quy tắc tách/gom phần tử trong mảng translations:
    - Nếu ảnh chứa danh sách các MỤC MENU, LỰA CHỌN, NHÃN UI riêng lẻ (ví dụ: Appearance / Hide / Text / Small / Standard...) → mỗi mục là 1 phần tử RIÊNG trong mảng.
    - Nếu ảnh chứa VĂN BẢN, ĐỀ MỤC, CÂU CHẠY LIÊN TIẾP (kể cả nhiều dòng xuống hàng) → gom thành 1 phần tử duy nhất trong mảng, dịch tự nhiên.
@@ -717,7 +756,8 @@ Input text:\n\n${selectedText}${contextPrompt}${glossaryPrompt}`;
         }
       ],
       generationConfig: {
-        responseMimeType: 'application/json'
+        responseMimeType: 'application/json',
+        temperature: 0.2
       }
     };
 
@@ -1037,7 +1077,8 @@ Input text:\n\n${rawText}${glossaryPrompt}`;
         }
       ],
       generationConfig: {
-        responseMimeType: 'application/json'
+        responseMimeType: 'application/json',
+        temperature: 0.2
       }
     };
 
@@ -1151,7 +1192,8 @@ Trả về JSON đúng schema, không thêm text khác:
         }
       ],
       generationConfig: {
-        responseMimeType: 'application/json'
+        responseMimeType: 'application/json',
+        temperature: 0.2
       }
     };
 

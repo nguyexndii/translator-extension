@@ -88,6 +88,82 @@
     autoPausedVideos = [];
   }
 
+  // Cố gắng chụp thẳng khung hình GỐC (native resolution) của thẻ <video> đang chứa vùng
+  // khoanh chọn, thay vì dùng ảnh chụp toàn màn hình (chrome.tabs.captureVisibleTab).
+  //
+  // LÝ DO: chrome.tabs.captureVisibleTab chỉ chụp lại đúng những gì đang HIỂN THỊ trên
+  // màn hình. Khi video ở chế độ fullscreen (HTML5 Fullscreen API), video được phóng to
+  // lấp đầy viewport nên vùng chữ khoanh chọn tương ứng với rất nhiều pixel thật → ảnh nét,
+  // Gemini đọc/dịch tốt. Khi KHÔNG fullscreen, cùng video đó chỉ hiển thị nhỏ trong khung
+  // player trên trang (vd 640x360) nên cùng vùng chữ đó chỉ còn vài chục pixel → ảnh mờ,
+  // Gemini không đọc được chữ gốc (đặc biệt chữ Hán/Nhật nét nhỏ) nên trả nguyên văn không dịch.
+  //
+  // Giải pháp: vẽ trực tiếp từ <video> (video.videoWidth/videoHeight là độ phân giải NGUỒN,
+  // không đổi dù video hiển thị to hay nhỏ trên trang) lên canvas, cho kết quả ổn định/đồng
+  // bộ bất kể đang fullscreen hay không. Nếu video bị DRM bảo vệ (canvas "tainted") hoặc có
+  // lỗi khác, hàm trả về null để code gọi nó tự động dùng lại cách chụp màn hình cũ.
+  function getVideoFrameCropDataUrl(rect) {
+    try {
+      const videos = Array.from(document.querySelectorAll('video')).filter(
+        v => v.readyState >= 2 && v.videoWidth > 0 && v.videoHeight > 0
+      );
+      if (videos.length === 0) return null;
+
+      // Ưu tiên video có vùng giao với rect lớn nhất (trường hợp có nhiều video ẩn/nhỏ trên trang)
+      let bestVideo = null;
+      let bestOverlapArea = 0;
+      let bestVRect = null;
+
+      for (const video of videos) {
+        const vRect = video.getBoundingClientRect();
+        if (vRect.width < 20 || vRect.height < 20) continue;
+
+        const overlapW = Math.min(rect.x + rect.w, vRect.right) - Math.max(rect.x, vRect.left);
+        const overlapH = Math.min(rect.y + rect.h, vRect.bottom) - Math.max(rect.y, vRect.top);
+        if (overlapW <= 0 || overlapH <= 0) continue;
+
+        const area = overlapW * overlapH;
+        if (area > bestOverlapArea) {
+          bestOverlapArea = area;
+          bestVideo = video;
+          bestVRect = vRect;
+        }
+      }
+
+      if (!bestVideo) return null;
+
+      // Quy đổi toạ độ vùng chọn (viewport px) sang toạ độ pixel gốc của video
+      const scaleX = bestVideo.videoWidth / bestVRect.width;
+      const scaleY = bestVideo.videoHeight / bestVRect.height;
+
+      const sx = Math.max(0, (rect.x - bestVRect.left) * scaleX);
+      const sy = Math.max(0, (rect.y - bestVRect.top) * scaleY);
+      const sw = Math.min(bestVideo.videoWidth - sx, rect.w * scaleX);
+      const sh = Math.min(bestVideo.videoHeight - sy, rect.h * scaleY);
+
+      if (sw < 6 || sh < 6) return null;
+
+      // Nếu vùng cắt từ nguồn vẫn khá nhỏ (video gốc độ phân giải thấp), phóng to nhẹ
+      // để Gemini có nhiều pixel hơn để "nhìn", giới hạn cạnh dài tối đa ~900px cho payload nhẹ.
+      const longSide = Math.max(sw, sh);
+      const scale = longSide < 450 ? Math.min(2, 900 / longSide) : 1;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(sw * scale));
+      canvas.height = Math.max(1, Math.round(sh * scale));
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(bestVideo, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+
+      // toDataURL sẽ ném SecurityError nếu canvas bị "tainted" (video DRM/EME được bảo vệ)
+      return canvas.toDataURL('image/jpeg', 0.92);
+    } catch (err) {
+      console.warn('Video direct-frame capture không khả dụng (có thể do DRM), sẽ dùng cách chụp màn hình mặc định:', err);
+      return null;
+    }
+  }
+
   // Robustly append overlay to active container (handles HTML5 Fullscreen mode and windowed mode)
   function appendToActiveContainer(el) {
     if (!el) return;
@@ -666,15 +742,30 @@
         const capturedScrollX = window.scrollX;
         const capturedScrollY = window.scrollY;
 
-        // Send crop area coordinates and page context to background script
-        safeSendMessage({
-          action: 'process-crop-selection',
-          rect: { x, y, w, h },
-          pageScrollX: capturedScrollX,
-          pageScrollY: capturedScrollY,
-          devicePixelRatio: dpr,
-          context: context
-        });
+        // Nếu vùng khoanh nằm trên 1 thẻ <video>, thử chụp thẳng khung hình gốc (native
+        // resolution) để kết quả dịch ổn định/đồng bộ bất kể đang fullscreen hay không.
+        const videoFrameDataUrl = getVideoFrameCropDataUrl({ x, y, w, h });
+
+        if (videoFrameDataUrl) {
+          safeSendMessage({
+            action: 'process-crop-selection-direct-image',
+            base64Data: videoFrameDataUrl,
+            rect: { x, y, w, h },
+            pageScrollX: capturedScrollX,
+            pageScrollY: capturedScrollY,
+            context: context
+          });
+        } else {
+          // Send crop area coordinates and page context to background script
+          safeSendMessage({
+            action: 'process-crop-selection',
+            rect: { x, y, w, h },
+            pageScrollX: capturedScrollX,
+            pageScrollY: capturedScrollY,
+            devicePixelRatio: dpr,
+            context: context
+          });
+        }
       } else {
         // Selection too small, no translation will take place — resume video immediately
         resumeAutoPausedVideo();
@@ -940,15 +1031,18 @@
         if (item.bbox) {
           const r = bboxToPageRect(item.bbox);
 
-          // width tối thiểu = đúng bbox gốc, tối đa = nới rộng nhưng KHÔNG vượt viewport
-          const minW = r.width;
-          const maxW = Math.min(window.innerWidth - 40, Math.max(minW * 2.4, 260));
+          // KHÔNG ép minWidth theo bbox chữ gốc nữa: chữ gốc (vd chữ hoa dãn cách,
+          // font đặc thù...) thường có bbox rộng hơn nhiều so với chữ đã dịch,
+          // khiến khung đen bị "thừa" khoảng trống. Để width co khít theo max-content,
+          // chỉ dùng bbox để giới hạn chiều rộng TỐI ĐA (tránh tràn quá xa vị trí gốc)
+          // và làm mốc căn vị trí/kích thước tối thiểu khi chữ dịch quá ngắn (1-2 ký tự).
+          const maxW = Math.min(window.innerWidth - 40, Math.max(r.width * 1.6, 220));
 
           block.style.width     = 'max-content';
-          block.style.minWidth  = minW + 'px';
+          block.style.minWidth  = '0';
           block.style.maxWidth  = maxW + 'px';
           block.style.height    = 'auto';
-          block.style.minHeight = r.height + 'px';
+          block.style.minHeight = Math.min(r.height, 28) + 'px';
 
           translationContainer.appendChild(block); // append trước để đo offsetWidth/Height thật
 
